@@ -29,7 +29,7 @@ Requires Python 3.11+.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate     # or: uv venv --python 3.12 .venv
-pip install -e ".[dev]"
+pip install -e ".[dev,test]"
 cp .env.example .env                                   # optional: add STACKEXCHANGE_KEY
 pytest -q                                              # offline tests on synthetic fixtures
 ```
