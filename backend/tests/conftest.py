@@ -1,14 +1,19 @@
 """API test fixtures: a dedicated ``<db>_test`` database, migrated with Alembic and loaded with the
-SYNTHETIC demo dataset. Tests are skipped when PostgreSQL is unreachable."""
+SYNTHETIC demo dataset. Tests are skipped when PostgreSQL is unreachable, and the test module skips
+itself when the ``api`` extras are not installed (so ``pip install -e ".[dev,test]"`` + ``pytest`` works)."""
 
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import make_url
-from sqlalchemy.orm import sessionmaker
 
-from backend.app.core.config import get_settings
+try:
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.engine import make_url
+    from sqlalchemy.orm import sessionmaker
+
+    from backend.app.core.config import get_settings
+except ImportError:  # api extras missing: test_api.py skips itself before any fixture is used
+    pass
 
 
 def _test_url() -> str:

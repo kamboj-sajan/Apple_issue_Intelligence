@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import inspect, text
+
+for _mod in ("fastapi", "sqlalchemy", "psycopg", "pgvector", "pydantic_settings"):
+    pytest.importorskip(_mod, reason="API tests need the api extras: pip install -e '.[api]'")
+
+from sqlalchemy import inspect, text  # noqa: E402
 
 
 def test_health_and_demo_label(client):

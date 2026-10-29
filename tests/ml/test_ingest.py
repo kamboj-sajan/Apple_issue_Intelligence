@@ -153,3 +153,14 @@ def test_ingest_ids_batches_skips_done_and_records_missing(tmp_path):
     assert len(session2.calls) == 1 and session2.calls[0]["url"].endswith("/questions/200")
     items, _ = load_raw_items(RawStore(tmp_path / "raw"))
     assert set(items["_source_file"].str.split("/").str[0]) == {"by_id"}
+
+
+def test_cli_exit_codes_and_missing_input_message(tmp_path, capsys):
+    from ml import cli
+
+    assert cli._exit_code("ingest", {"items": 0, "stopped_reason": "quota_exhausted: wait"}) == 2
+    assert cli._exit_code("ingest", {"items": 5, "stopped_reason": "quota_reserve"}) == 0
+    assert cli._exit_code("preprocess", {}) == 0
+    rc = cli.main(["--data-dir", str(tmp_path), "split"])
+    err = capsys.readouterr().err
+    assert rc == 1 and "Run `aii preprocess` first" in err and "Traceback" not in err

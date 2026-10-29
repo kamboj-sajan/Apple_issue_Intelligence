@@ -392,9 +392,49 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     cfg = load_config(args.config, args.data_dir)
-    result = COMMANDS[args.command][0](cfg, args)
+    try:
+        result = COMMANDS[args.command][0](cfg, args)
+    except (FileNotFoundError, RuntimeError) as exc:
+        if args.verbose:
+            raise
+        prereq = PREREQUISITES.get(args.command)
+        hint = f" Run `aii {prereq}` first." if prereq else ""
+        sys.stderr.write(f"aii {args.command}: {exc}.{hint} (Use -v for the full traceback.)\n")
+        return 1
     json.dump(result, sys.stdout, indent=2, default=str)
     sys.stdout.write("\n")
+    return _exit_code(args.command, result)
+
+
+# The step that produces each command's inputs (shown when an input file is missing).
+PREREQUISITES = {
+    "preprocess": "ingest",
+    "split": "preprocess",
+    "fetch-linked": "preprocess",
+    "embed": "preprocess",
+    "clusters": "split && aii embed",
+    "anomalies": "preprocess",
+    "anomaly-eval": "preprocess",
+    "retrieval-eval": "split && aii embed",
+    "graph": "split && aii embed",
+    "drift": "clusters",
+    "drift-eval": "drift",
+    "link-predict": "graph",
+    "graph-neighbors": "graph",
+}
+
+
+def _exit_code(command: str, result: dict) -> int:
+    """Non-zero when an ingestion run collected nothing because of quota or API errors."""
+    if command in ("ingest", "update", "fetch-linked"):
+        reason = str(result.get("stopped_reason", ""))
+        if result.get("items", 0) == 0 and reason.startswith(("quota_exhausted", "api_error")):
+            sys.stderr.write(
+                f"aii {command}: no questions collected ({reason}). Without STACKEXCHANGE_KEY the API allows "
+                "300 requests/day per IP; add a free key to .env (see README) or retry later. "
+                "Progress is checkpointed.\n"
+            )
+            return 2
     return 0
 
 
