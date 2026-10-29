@@ -8,6 +8,36 @@ semantic drift over time.
 > Outputs are signals from publicly posted questions, **not** evidence of product defects,
 > causal relationships, or the number of affected users.
 
+## Screenshots
+
+All screenshots show real results (42,555 questions, 2019 → 2026). A guided tour of what they show is
+in [docs/demo.md](docs/demo.md).
+
+**Emerging issues:** the macOS Catalina release week (124 questions vs 6.8 expected), with the
+statistical test, baseline period and the questions behind the signal.
+
+![Emerging issues: macOS Catalina signal](docs/images/emerging-issues.png)
+
+**Related questions:** BM25, embedding and GraphSAGE recommendations side by side with their evidence.
+All three rank the community-chosen duplicate of this 2025 question first: a much older question, which
+none of the methods used as input.
+
+![Related questions comparison](docs/images/related-questions.png)
+
+<table>
+<tr>
+<td width="50%"><b>Knowledge graph:</b> typed neighbourhood of the same question; the dashed edge is the known duplicate.<br><img src="docs/images/knowledge-graph.png" alt="Knowledge graph"></td>
+<td width="50%"><b>Drift monitoring:</b> monthly drift vs calibrated thresholds, alerts and new vocabulary (<code>m1</code>, <code>m3</code>, <code>tahoe</code>).<br><img src="docs/images/drift.png" alt="Drift monitoring"></td>
+</tr>
+<tr>
+<td width="50%"><b>Model evaluation:</b> GraphSAGE vs baselines with bootstrap CIs. GraphSAGE does not significantly beat embeddings on ranking.<br><img src="docs/images/model-evaluation.png" alt="Model evaluation"></td>
+<td width="50%"><b>Overview:</b> totals, signals, data freshness and the most active issue categories.<br><img src="docs/images/overview.png" alt="Overview"></td>
+</tr>
+</table>
+
+<sub>Question titles shown are from Ask Different (CC BY-SA); authors and licences are listed in
+[docs/images/ATTRIBUTION.md](docs/images/ATTRIBUTION.md).</sub>
+
 ## Status
 
 | Milestone | State |
