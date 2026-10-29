@@ -174,6 +174,47 @@ def cmd_retrieval_eval(cfg: Config, args: argparse.Namespace) -> dict:
     return {"manifest": res["manifest"], "results": t[keep].round(4).to_dict("records")}
 
 
+def _graph_dir(cfg: Config):
+    return cfg.paths.artifacts / "graph" / _snapshot(cfg)
+
+
+def cmd_graph(cfg: Config, args: argparse.Namespace) -> dict:
+    import pandas as pd
+
+    from ml.graph.build import GraphConfig
+    from ml.graph.pipeline import run_graph
+    from ml.retrieval.embeddings import load_or_compute
+
+    q = pd.read_parquet(cfg.paths.processed / "questions.parquet")
+    model = cfg.raw.get("retrieval", {}).get("embedding_model")
+    emb, ids = load_or_compute(q, cfg.paths.artifacts, _snapshot(cfg), model)
+    sig_path = cfg.paths.artifacts / "anomalies" / _snapshot(cfg) / "signals.parquet"
+    signals = pd.read_parquet(sig_path) if sig_path.exists() else None
+    gcfg = GraphConfig(**cfg.raw.get("graph", {}))
+    s = run_graph(cfg.paths.processed, _graph_dir(cfg), emb, ids, signals, gcfg, seed=args.seed)
+    return {
+        k: s[k] for k in ("validation", "statistics", "question_projection_components", "n_communities", "top_bridges")
+    }
+
+
+def cmd_graph_neighbors(cfg: Config, args: argparse.Namespace) -> dict:
+    import pandas as pd
+
+    from ml.graph.analysis import neighbors
+    from ml.graph.build import to_networkx
+
+    d = _graph_dir(cfg)
+    G = to_networkx(pd.read_parquet(d / "nodes.parquet"), pd.read_parquet(d / "edges.parquet"))
+    if args.node_id not in G:
+        raise SystemExit(f"unknown node id {args.node_id!r} (format: question:<id>, tag:<name>, os:macos:14, ...)")
+    types = set(args.edge_types.split(",")) if args.edge_types else None
+    return {
+        "node": args.node_id,
+        "label": G.nodes[args.node_id].get("label"),
+        "neighbors": neighbors(G, args.node_id, edge_types=types, limit=args.limit),
+    }
+
+
 def cmd_status(cfg: Config, args: argparse.Namespace) -> dict:
     ckpt = Checkpoint(cfg.paths.state / f"ingest_{cfg.source['site']}.json").state
     chunks = ckpt["chunks"]
@@ -203,6 +244,8 @@ COMMANDS = {
     "embed": (cmd_embed, "Compute (or load cached) sentence-transformer embeddings."),
     "clusters": (cmd_clusters, "Fit semantic clusters on train embeddings (used as issue groups)."),
     "retrieval-eval": (cmd_retrieval_eval, "Evaluate BM25 and embedding related-question retrieval."),
+    "graph": (cmd_graph, "Build, validate and analyse the heterogeneous knowledge graph."),
+    "graph-neighbors": (cmd_graph_neighbors, "Show typed neighbours of a graph node."),
     "status": (cmd_status, "Show ingestion checkpoint and processed snapshot."),
 }
 
@@ -229,6 +272,12 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "clusters":
             sp.add_argument("--k", type=int, default=40)
             sp.add_argument("--seed", type=int, default=0)
+        if name == "graph":
+            sp.add_argument("--seed", type=int, default=0, help="Louvain seed")
+        if name == "graph-neighbors":
+            sp.add_argument("node_id")
+            sp.add_argument("--edge-types", help="comma-separated edge types")
+            sp.add_argument("--limit", type=int, default=20)
         if name == "retrieval-eval":
             sp.add_argument("--no-embeddings", action="store_true", help="BM25 only")
     return p

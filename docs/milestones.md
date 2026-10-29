@@ -143,7 +143,63 @@ past-only baselines, sparse-group handling, PELT shift vs spike, offset invarian
 end-to-end ranking, and deterministic evaluation. Retrieval tests check BM25 against `rank_bm25`,
 tie-aware ranks, earlier-only candidates, and explanations.
 
-### Prerequisites for Milestone 4
+## Milestone 4: Knowledge graph (done)
 
-* Embeddings, clusters and links exist for snapshot `3d642dc498c8`.
-* The graph needs semantic kNN edges restricted to earlier questions, plus link edges filtered by `known_at`.
+| Component | File |
+|-----------|------|
+| Node/edge schema, ids, validation | `ml/graph/schema.py` |
+| Construction rules, `as_of` snapshots, NetworkX view | `ml/graph/build.py` |
+| Statistics, components, Louvain communities, bridges, neighbours, ego graphs | `ml/graph/analysis.py` |
+| End-to-end run | `ml/graph/pipeline.py` (`aii graph`, `aii graph-neighbors`) |
+
+Schema and the reasoning behind each threshold: [graph_schema.md](graph_schema.md).
+
+### Results on snapshot `3d642dc498c8`
+
+* **47,333 nodes**: 45,096 questions, 916 tags, 846 weeks, 308 error codes, 71 OS versions,
+  49 devices, 34 technical entities, 13 categories.
+* **564,342 edges**, all 12 types, schema validation passed: semantic 167,477 · tag 132,501 ·
+  category 69,430 · temporal 54,751 · week 45,096 · device 34,464 · tech 33,540 · OS 20,926 ·
+  body-link labels 2,867 · duplicate labels 2,420 · error 856 · spike 14 (cluster and tag-pair signals
+  have no node type, so they're not represented).
+* **Question degree:** median 15, p90 32, max 145, so the graph is sparse by construction. No isolated nodes.
+* **Question-question projection** (semantic + temporal edges): 90.2 % of questions in one giant
+  component; 3,755 questions have no semantic or temporal neighbour.
+* **39 Louvain communities** (≥ 10 questions), which are coherent: partitions/Boot Camp, startup/SSD,
+  browsers/keychain, audio/Bluetooth, Photos/iCloud, displays/Thunderbolt, Wi-Fi, Homebrew/terminal,
+  battery/charging, Time Machine, Mail, …
+* **Bridges:** an AirTag community linking iPhone and macOS questions; Wi-Fi and audio/Bluetooth
+  communities spanning iPhone and MacBook Pro; a Monterey printing community linking macOS 10.15, 11
+  and 12.
+* **Snapshots:** from 13,430 nodes and 121,662 edges (1 Jan 2020) to 47,333 and 564,342. The giant-component
+  share grows from 77 % to 90 %, and mean question degree from 13.2 to 17.6.
+* **Example:** a December 2025 macOS Tahoe 26.2 question about the Safari sidebar in full screen is
+  linked to its duplicate target, question 209114 (a much older question). It also has a
+  semantic edge (cosine 0.82) and temporal edges to other Tahoe 26.2 questions from the same week.
+
+### Issues found and fixed
+
+* The spike-edge weight was computed as `-log10(q).clip(...)`, which clips *before* negating, so q = 0.001
+  became −0.001. Schema validation (weights must be > 0) caught it; a regression test now covers it.
+* Bridge scoring first used Jaccard, which flagged `keyboard + macos` as a bridge only because `macos`
+  is very common. It now uses the overlap coefficient.
+
+### Tests
+
+62 passed in total (10 graph tests). The graph tests cover schema validation (dangling edges, wrong endpoints,
+edges known before an endpoint), evidence-based weights, earlier-only semantic and temporal edges,
+the generic-entity filter, label-edge flagging and exclusion, `as_of` snapshots with no future facts,
+neighbours and bounded ego graphs, and community/bridge detection on a constructed graph.
+
+### Known limitations
+
+* Question text is the latest revision, so post-cutoff edits can leak into text features (affects every
+  text method equally; noted for Milestone 5).
+* Louvain results depend on the seed (seed 0 is recorded). Communities are descriptive, not ground truth.
+* 846 week nodes include pre-2019 weeks that come only from context questions.
+
+### Prerequisites for Milestone 5
+
+* PyTorch Geometric is installed (2.8.1). The PPI benchmark dataset downloads on first use.
+* Link-prediction graph: `to_networkx(..., include_label_edges=False)` plus training label edges
+  with `known_at` before the validation boundary.

@@ -52,3 +52,12 @@ anomaly:
 
 retrieval:
   embedding_model: sentence-transformers/all-MiniLM-L6-v2
+
+graph:
+  knn_k: 10                     # semantic edges per question (to earlier questions only)
+  knn_threshold: 0.6            # > 99.9th pct of random-pair cosine (0.534); duplicate median is 0.627
+  temporal_window_days: 7
+  temporal_min_shared: 2        # shared specific entities/tags required for a temporal edge
+  temporal_max_per_question: 5
+  temporal_tau_days: 3
+  generic_max_df: 0.05          # entities/tags on >5% of questions are too generic for temporal edges
