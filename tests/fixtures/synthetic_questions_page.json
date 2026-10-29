@@ -1,0 +1,102 @@
+{
+  "_comment": "SYNTHETIC TEST FIXTURE. Hand-written to mimic the Stack Exchange API /questions response shape. Not real Ask Different data.",
+  "has_more": false,
+  "quota_max": 300,
+  "quota_remaining": 250,
+  "items": [
+    {
+      "question_id": 9000001,
+      "title": "MacBook Pro won&#39;t boot after updating to macOS Sonoma 14.2",
+      "body": "<p>My MacBook Pro (M1 chip) is stuck on the Apple logo after the update.</p>\n<pre><code>panic(cpu 0 caller 0xfffffe0012345678): error -36\n</code></pre>\n<p>See <a href=\"https://apple.stackexchange.com/questions/9000002/some-title\">this question</a> and <a href=\"https://apple.stackexchange.com/a/123\">an answer</a>.</p>",
+      "tags": [
+        "macos-sonoma",
+        "boot",
+        "macbook-pro"
+      ],
+      "creation_date": 1704067200,
+      "last_activity_date": 1704153600,
+      "last_edit_date": 1704100000,
+      "score": 3,
+      "view_count": 120,
+      "answer_count": 1,
+      "is_answered": true,
+      "accepted_answer_id": 9100001,
+      "link": "https://apple.stackexchange.com/questions/9000001/synthetic",
+      "content_license": "CC BY-SA 4.0",
+      "owner": {
+        "display_name": "synthetic-user-a",
+        "link": "https://example.invalid/u/a"
+      }
+    },
+    {
+      "question_id": 9000002,
+      "title": "iPhone 15 battery drains fast on iOS 17.1",
+      "body": "<p>Battery&nbsp;drain since iOS&nbsp;17.1 &mdash; Wi\u2011Fi and Bluetooth off.</p>",
+      "tags": [
+        "iphone",
+        "battery",
+        "ios"
+      ],
+      "creation_date": 1704240000,
+      "last_activity_date": 1704240000,
+      "score": 0,
+      "answer_count": 0,
+      "is_answered": false,
+      "link": "https://apple.stackexchange.com/questions/9000002/synthetic",
+      "content_license": "CC BY-SA 4.0"
+    },
+    {
+      "question_id": 9000003,
+      "title": "Stuck on Apple logo after Sonoma update",
+      "body": "<p>Same problem as before.</p>",
+      "tags": [
+        "macos",
+        "boot"
+      ],
+      "creation_date": 1704326400,
+      "last_activity_date": 1704499200,
+      "closed_date": 1704499200,
+      "closed_reason": "Duplicate",
+      "closed_details": {
+        "reason": "Duplicate",
+        "on_hold": false,
+        "original_questions": [
+          {
+            "question_id": 9000001,
+            "title": "MacBook Pro won't boot"
+          }
+        ]
+      },
+      "score": -1,
+      "view_count": 15,
+      "answer_count": 0,
+      "is_answered": false,
+      "link": "https://apple.stackexchange.com/questions/9000003/synthetic",
+      "content_license": "CC BY-SA 4.0",
+      "owner": {
+        "display_name": "synthetic-user-c",
+        "link": "https://example.invalid/u/c"
+      }
+    },
+    {
+      "question_id": 9000004,
+      "title": "Stuck on Apple logo after Sonoma update",
+      "body": "<p>Same   problem as before.</p>",
+      "tags": [
+        "macos"
+      ],
+      "creation_date": 1704412800,
+      "last_activity_date": 1704412800,
+      "score": 0,
+      "view_count": 2,
+      "answer_count": 0,
+      "is_answered": false,
+      "link": "https://apple.stackexchange.com/questions/9000004/synthetic",
+      "content_license": "CC BY-SA 4.0"
+    },
+    {
+      "title": "Record without an id should be dropped",
+      "creation_date": 1704412800
+    }
+  ]
+}

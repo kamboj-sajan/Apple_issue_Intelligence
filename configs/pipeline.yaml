@@ -1,0 +1,35 @@
+# Pipeline configuration. Paths are relative to the repository root unless absolute.
+# Environment overrides: AII_DATA_DIR, STACKEXCHANGE_KEY.
+
+data_dir: ./data
+
+source:
+  api_base: https://api.stackexchange.com/2.3
+  site: apple
+  # Custom filter created via /filters/create (see docs/data_policy.md). Includes body,
+  # closed_details.original_questions, accepted_answer_id, last_edit_date; excludes user ids,
+  # reputation and avatars. Only author display_name/link are kept, for CC BY-SA attribution.
+  filter: "!B8mNJazdo)wiZFt*a7JZ_OJE0gc)-W"
+
+ingestion:
+  start: "2019-01-01"        # inclusive, UTC
+  end: null                  # exclusive, UTC; null = now
+  chunk: month               # creation-date chunk size for paginated collection
+  page_size: 100             # API maximum
+  min_interval_seconds: 0.5  # polite spacing between requests
+  max_retries: 5
+  quota_reserve: 10          # stop when this many requests remain in the daily quota
+  timeout_seconds: 30
+
+preprocessing:
+  entities_config: configs/entities.yaml
+
+splits:
+  # Fractions of questions (by creation time). Boundaries are rounded down to a Monday 00:00 UTC.
+  train_fraction: 0.70
+  val_fraction: 0.15
+  # Optional explicit boundaries (ISO dates); when set they override fractions.
+  val_start: null
+  test_start: null
+
+time_window: W-MON  # pandas offset alias for weekly windows starting Monday

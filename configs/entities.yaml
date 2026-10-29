@@ -1,0 +1,152 @@
+# Transparent, rule-based entity dictionaries.
+# Every pattern is a case-insensitive Python regex applied to title, body text, code blocks and
+# tags (tags have '-' replaced by ' '). Canonical values are stable identifiers used as graph
+# node ids and anomaly group keys. Edit freely; extraction records which pattern matched.
+
+devices:
+  # family: canonical family id. A named group (?P<model>...) adds a model suffix, e.g. iphone:15
+  - family: iphone
+    patterns: ['\biphone\s?(?P<model>\d{1,2}|se|x[rs]?)?\b']
+  - family: ipad
+    patterns: ['\bipad\s?(?P<model>pro|air|mini)?\b']
+  - family: macbook-pro
+    patterns: ['\bmac\s?book\s?pro\b', '\bmbp\b']
+  - family: macbook-air
+    patterns: ['\bmac\s?book\s?air\b', '\bmba\b']
+  - family: macbook
+    patterns: ['\bmac\s?book\b(?!\s?(?:pro|air))']
+  - family: imac
+    patterns: ['\bimac\s?(?P<model>pro)?\b']
+  - family: mac-mini
+    patterns: ['\bmac\s?mini\b']
+  - family: mac-studio
+    patterns: ['\bmac\s?studio\b']
+  - family: mac-pro
+    patterns: ['(?<!book )\bmac\s?pro\b']
+  - family: apple-watch
+    patterns: ['\bapple\s?watch\b', '\bwatch\s?(?:series|ultra|se)\b']
+  - family: airpods
+    patterns: ['\bairpods?\s?(?P<model>pro|max)?\b']
+  - family: apple-tv
+    patterns: ['\bapple\s?tv\b']
+  - family: homepod
+    patterns: ['\bhomepod\b']
+  - family: vision-pro
+    patterns: ['\bvision\s?pro\b']
+  - family: apple-silicon
+    patterns: ['\bapple\s?silicon\b', '\bm(?P<model>[1-5])\s?(?:pro|max|ultra)?\s?(?:chip|mac|macbook|imac)\b']
+  - family: intel-mac
+    patterns: ['\bintel\s?(?:based\s?)?mac\b']
+
+os_versions:
+  # Named releases map to canonical versions. Order matters: longer names first.
+  named:
+    - {pattern: '\bhigh\s?sierra\b', value: 'macos:10.13'}
+    - {pattern: '(?<!high )(?<!high)\bsierra\b', value: 'macos:10.12'}
+    - {pattern: '\bel\s?capitan\b', value: 'macos:10.11'}
+    - {pattern: '\byosemite\b', value: 'macos:10.10'}
+    - {pattern: '\bmavericks\b', value: 'macos:10.9'}
+    - {pattern: '\bmojave\b', value: 'macos:10.14'}
+    - {pattern: '\bcatalina\b', value: 'macos:10.15'}
+    - {pattern: '\bbig\s?sur\b', value: 'macos:11'}
+    - {pattern: '\bmonterey\b', value: 'macos:12'}
+    - {pattern: '\bventura\b', value: 'macos:13'}
+    - {pattern: '\bsonoma\b', value: 'macos:14'}
+    - {pattern: '\bsequoia\b', value: 'macos:15'}
+    - {pattern: '\btahoe\b', value: 'macos:26'}
+  # Numeric patterns: group 'major' (and optional 'minor'). macOS 10.x keeps the minor.
+  numeric:
+    - {os: macos, pattern: '\b(?:mac\s?os\s?x?|os\s?x)\s?(?P<major>1[0-5]|2[6-9])(?:\.(?P<minor>\d{1,2}))?'}
+    - {os: ios, pattern: '\bios\s?(?P<major>[4-9]|1\d|2[0-9])(?:\.(?P<minor>\d{1,2}))?\b'}
+    - {os: ipados, pattern: '\bipados\s?(?P<major>1[3-9]|2[0-9])(?:\.(?P<minor>\d{1,2}))?\b'}
+    - {os: watchos, pattern: '\bwatchos\s?(?P<major>[1-9]|1\d|2[0-9])(?:\.(?P<minor>\d{1,2}))?\b'}
+    - {os: tvos, pattern: '\btvos\s?(?P<major>[9]|1\d|2[0-9])(?:\.(?P<minor>\d{1,2}))?\b'}
+    - {os: visionos, pattern: '\bvisionos\s?(?P<major>[1-9]|2[0-9])(?:\.(?P<minor>\d{1,2}))?\b'}
+
+error_codes:
+  # Group 'code' becomes the canonical value '<prefix>:<code>' (lower-cased).
+  - {prefix: error, pattern: '\berror(?:\s?code)?\s?[:#=]?\s?\(?(?P<code>-?\d{1,6})\b'}
+  - {prefix: error, pattern: '\berror(?:\s?code)?\s?[:#=]?\s?(?P<code>0x[0-9a-f]{4,16})\b'}
+  - {prefix: osstatus, pattern: '\bosstatus\s?(?:error\s?)?[:=]?\s?(?P<code>-?\d{1,6})\b'}
+  - {prefix: errno, pattern: '\berrno\s?[:=]?\s?(?P<code>\d{1,4})\b'}
+  - {prefix: domain, pattern: '\b(?P<code>(?:ns|k)\w{2,40}errordomain)\b'}
+  - {prefix: hex, pattern: '(?<![\w.])(?P<code>0x[0-9a-f]{8})\b'}
+
+technical_entities:
+  wifi: ['\bwi-?fi\b', '\bwlan\b']
+  bluetooth: ['\bbluetooth\b']
+  time-machine: ['\btime\s?machine\b']
+  filevault: ['\bfile\s?vault\b']
+  icloud: ['\bicloud\b']
+  spotlight: ['\bspotlight\b']
+  keychain: ['\bkeychain\b']
+  airdrop: ['\bairdrop\b']
+  airplay: ['\bairplay\b']
+  handoff: ['\bhandoff\b', '\buniversal\s?clipboard\b']
+  boot-camp: ['\bboot\s?camp\b']
+  recovery-mode: ['\brecovery\s?(?:mode|partition|os)\b']
+  kernel-panic: ['\bkernel\s?panic\b']
+  sip: ['\bsystem\s?integrity\s?protection\b', '\bcsrutil\b']
+  gatekeeper: ['\bgatekeeper\b']
+  apfs: ['\bapfs\b']
+  t2-chip: ['\bt2\s?(?:chip|security)\b']
+  touch-id: ['\btouch\s?id\b']
+  face-id: ['\bface\s?id\b']
+  thunderbolt: ['\bthunderbolt\b']
+  usb-c: ['\busb-?c\b']
+  homebrew: ['\bhomebrew\b', '\bbrew\s(?:install|upgrade|update)\b']
+  terminal: ['\bterminal(?:\.app)?\b', '\bzsh\b', '\bbash\b']
+  finder: ['\bfinder\b']
+  safari: ['\bsafari\b']
+  mail-app: ['\bapple\s?mail\b', '\bmail\.app\b']
+  photos-app: ['\bphotos\s?(?:app|library)\b']
+  messages-app: ['\bimessage\b', '\bmessages\s?app\b']
+  facetime: ['\bfacetime\b']
+  siri: ['\bsiri\b']
+  carplay: ['\bcarplay\b']
+  xcode: ['\bxcode\b']
+  launchd: ['\blaunchd\b', '\blaunch\s?(?:agent|daemon)s?\b']
+  mdm: ['\bmdm\b', '\bmobile\s?device\s?management\b']
+
+categories:
+  # A question gets every category with >=1 hit (tags count double). The primary category is the
+  # highest-scoring one, ties broken by the order below. No hit => 'uncategorized'.
+  battery-power:
+    tags: [battery, power, charging, power-management, sleep-wake]
+    keywords: ['\bbattery\b', '\bcharg(?:e|ing|er)\b', '\bdrain', '\bwon.?t\s?(?:turn|power)\s?on\b', '\bsleep\b']
+  network-connectivity:
+    tags: [wifi, network, internet, vpn, dns, ethernet, networking]
+    keywords: ['\bwi-?fi\b', '\bnetwork\b', '\bvpn\b', '\bdns\b', '\bethernet\b', '\binternet\b', '\bhotspot\b']
+  bluetooth-peripherals:
+    tags: [bluetooth, keyboard, mouse, trackpad, airpods, external-monitor, usb]
+    keywords: ['\bbluetooth\b', '\bkeyboard\b', '\bmouse\b', '\btrackpad\b', '\bairpods\b', '\bdongle\b']
+  storage-disk:
+    tags: [hard-drive, ssd, disk-utility, apfs, storage, external-disk, partition, filesystem]
+    keywords: ['\bdisk\b', '\bssd\b', '\bstorage\b', '\bpartition\b', '\bapfs\b', '\bpurgeable\b', '\bout of space\b']
+  boot-startup:
+    tags: [boot, startup, recovery, bootcamp, kernel-panic, firmware]
+    keywords: ['\bboot', '\bstartup\b', '\bstart\s?up\b', '\brecovery\b', '\bkernel\s?panic\b', '\bprohibitory\b', '\bstuck on (?:the )?apple logo\b']
+  update-install:
+    tags: [software-update, update, upgrade, installation, ios-update, installer]
+    keywords: ['\bupdat(?:e|ed|ing)\b', '\bupgrad(?:e|ed|ing)\b', '\binstall(?:er|ing|ation)?\b', '\bdowngrad']
+  performance:
+    tags: [performance, memory, cpu, slow, activity-monitor]
+    keywords: ['\bslow\b', '\blag', '\bhigh cpu\b', '\bmemory\s?(?:leak|pressure|usage)\b', '\bfan\b', '\boverheat', '\bbeach\s?ball\b']
+  display-graphics:
+    tags: [display, external-display, external-monitor, graphics-card, gpu, screen, resolution]
+    keywords: ['\bdisplay\b', '\bmonitor\b', '\bscreen\b', '\bresolution\b', '\bgpu\b', '\bflicker']
+  audio:
+    tags: [audio, sound, speakers, microphone, headphones]
+    keywords: ['\baudio\b', '\bsound\b', '\bspeakers?\b', '\bmicrophone\b', '\bheadphones?\b']
+  backup-sync:
+    tags: [time-machine, backup, icloud, icloud-drive, sync, migration-assistant]
+    keywords: ['\bbackup\b', '\btime\s?machine\b', '\bicloud\b', '\bsync', '\bmigration\s?assistant\b', '\brestore\b']
+  security-auth:
+    tags: [security, password, keychain, filevault, apple-id, authentication, two-factor-authentication, privacy]
+    keywords: ['\bpassword\b', '\bkeychain\b', '\bfilevault\b', '\bapple\s?id\b', '\b2fa\b', '\btwo.?factor\b', '\bmalware\b', '\bpermission']
+  app-crash:
+    tags: [crash, freeze, applications, hang]
+    keywords: ['\bcrash', '\bfreez', '\bquit(?:s)? unexpectedly\b', '\bnot responding\b', '\bhangs?\b', '\bwon.?t\s?(?:open|launch)\b']
+  messaging-communication:
+    tags: [messages, imessage, facetime, mail.app, email, phone]
+    keywords: ['\bimessage\b', '\bmessages\b', '\bfacetime\b', '\bemail\b', '\bmail\b', '\bsms\b']
