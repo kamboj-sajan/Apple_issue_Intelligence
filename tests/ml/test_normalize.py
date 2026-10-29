@@ -81,3 +81,16 @@ def test_run_preprocessing_writes_tables_and_manifest(tmp_path, synthetic_page):
     assert again["snapshot_id"] == manifest["snapshot_id"]  # deterministic
     reloaded = pd.read_parquet(out / "questions.parquet")
     assert reloaded["tags"].iloc[0].tolist() == ["macos-sonoma", "boot", "macbook-pro"]
+
+
+def test_questions_fetched_only_by_id_are_context_not_research_window(tmp_path, synthetic_page, extractor):
+    store = _store_with_page(tmp_path, synthetic_page)
+    older = {"items": [dict(synthetic_page["items"][0], question_id=42, creation_date=1300000000)]}
+    store.write_page("by_id", "ids_x", 1, {"method": "questions/42"}, older)
+    store.write_page("by_id", "ids_x", 2, {"method": "questions/9000001"}, {"items": [synthetic_page["items"][0]]})
+    items, _ = load_raw_items(store)
+    q, _, _, quality = normalize_questions(items, extractor)
+    flags = q.set_index("question_id")["in_research_window"]
+    assert not flags[42]
+    assert flags[9000001]  # seen in a creation crawl too, so it stays in the window
+    assert quality["context_questions_outside_window"] == 1

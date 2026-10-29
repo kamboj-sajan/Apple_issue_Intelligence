@@ -126,3 +126,30 @@ def test_update_mode_captures_later_activity_and_sets_watermark(tmp_path):
     latest, _ = deduplicate_versions(items)
     row = latest.set_index("question_id").loc[100]
     assert row["closed_reason"] == "Duplicate"  # newest version wins
+
+
+def test_ingest_ids_batches_skips_done_and_records_missing(tmp_path):
+    by_id = {q["question_id"]: q for q in CORPUS}
+
+    def handler(url, params):
+        ids = [int(i) for i in url.rsplit("/", 1)[1].split(";")]
+        return FakeResponse({"items": [by_id[i] for i in ids if i in by_id], "has_more": False, "quota_remaining": 50})
+
+    def make():
+        session = FakeSession(handler=handler)
+        clock = FakeClock()
+        client = StackExchangeClient("apple", "F", session=session, sleep=clock.sleep, clock=clock, min_interval=0)
+        return Ingestor(client, RawStore(tmp_path / "raw"), Checkpoint(tmp_path / "ckpt.json")), session
+
+    ing, session = make()
+    summary = ing.ingest_ids([100, 101, 102, 999], batch_size=2)
+    assert summary.requests == 2 and summary.items == 3
+    assert session.calls[0]["url"].endswith("/questions/100;101")
+    state = Checkpoint(tmp_path / "ckpt.json").state["by_id"]
+    assert sorted(state["fetched"]) == [100, 101, 102] and state["missing"] == [999]
+
+    ing2, session2 = make()
+    ing2.ingest_ids([100, 999, 200])  # only 200 is new
+    assert len(session2.calls) == 1 and session2.calls[0]["url"].endswith("/questions/200")
+    items, _ = load_raw_items(RawStore(tmp_path / "raw"))
+    assert set(items["_source_file"].str.split("/").str[0]) == {"by_id"}

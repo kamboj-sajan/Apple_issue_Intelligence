@@ -72,6 +72,14 @@ def cmd_split(cfg: Config, args: argparse.Namespace) -> dict:
     )
 
 
+def cmd_fetch_linked(cfg: Config, args: argparse.Namespace) -> dict:
+    import pandas as pd
+
+    links = pd.read_parquet(cfg.paths.processed / "question_links.parquet")
+    missing = links.loc[~links["target_in_corpus"], "target_id"].unique().tolist()
+    return _ingestor(cfg, args.max_requests).ingest_ids(missing).__dict__
+
+
 def cmd_status(cfg: Config, args: argparse.Namespace) -> dict:
     ckpt = Checkpoint(cfg.paths.state / f"ingest_{cfg.source['site']}.json").state
     chunks = ckpt["chunks"]
@@ -95,6 +103,7 @@ COMMANDS = {
     "update": (cmd_update, "Fetch questions with activity since the last watermark."),
     "preprocess": (cmd_preprocess, "Rebuild normalised tables from raw pages."),
     "split": (cmd_split, "Write the time-based train/val/test split."),
+    "fetch-linked": (cmd_fetch_linked, "Fetch linked/duplicate-target questions missing from the corpus."),
     "status": (cmd_status, "Show ingestion checkpoint and processed snapshot."),
 }
 
@@ -109,6 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
         sp = sub.add_parser(name, help=help_text)
         if name in ("ingest", "update"):
             sp.add_argument("--start", help="research window start (ISO date, UTC)")
+        if name in ("ingest", "update", "fetch-linked"):
             sp.add_argument("--max-requests", type=int, help="stop after this many API requests")
         if name == "ingest":
             sp.add_argument("--end", help="exclusive end (ISO date, UTC); default now")

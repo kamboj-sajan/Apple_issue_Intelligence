@@ -64,13 +64,17 @@ os_versions:
     - {os: visionos, pattern: '\bvisionos\s?(?P<major>[1-9]|2[0-9])(?:\.(?P<minor>\d{1,2}))?\b'}
 
 error_codes:
+  # Bare hex numbers (e.g. 0xff000000) are NOT matched: in crash logs they are almost always
+  # memory addresses or register values, which flooded the first real run with noise.
   # Group 'code' becomes the canonical value '<prefix>:<code>' (lower-cased).
   - {prefix: error, pattern: '\berror(?:\s?code)?\s?[:#=]?\s?\(?(?P<code>-?\d{1,6})\b'}
   - {prefix: error, pattern: '\berror(?:\s?code)?\s?[:#=]?\s?(?P<code>0x[0-9a-f]{4,16})\b'}
   - {prefix: osstatus, pattern: '\bosstatus\s?(?:error\s?)?[:=]?\s?(?P<code>-?\d{1,6})\b'}
   - {prefix: errno, pattern: '\berrno\s?[:=]?\s?(?P<code>\d{1,4})\b'}
   - {prefix: domain, pattern: '\b(?P<code>(?:ns|k)\w{2,40}errordomain)\b'}
-  - {prefix: hex, pattern: '(?<![\w.])(?P<code>0x[0-9a-f]{8})\b'}
+
+# Codes that carry no diagnostic information (generic exit statuses, all-zero values).
+error_code_ignore: ['0', '1', '-1', '0x0+']
 
 technical_entities:
   wifi: ['\bwi-?fi\b', '\bwlan\b']

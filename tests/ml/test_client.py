@@ -101,3 +101,11 @@ def test_non_retryable_api_error_raises():
     client, _ = make_client(FakeSession([bad]))
     with pytest.raises(ApiError, match="bad_parameter"):
         client.get("questions")
+
+
+def test_backoff_applies_to_base_method_across_vectorized_ids():
+    session = FakeSession([ok(backoff=7), ok()])
+    client, clock = make_client(session, min_interval=0)
+    client.get("questions/1;2")
+    client.get("questions/3;4")
+    assert clock.sleeps == [7.0]

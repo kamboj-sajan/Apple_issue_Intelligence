@@ -65,24 +65,33 @@ def _ids_sha(ids: pd.Series) -> str:
 def make_splits(
     questions: pd.DataFrame, snapshot: str | None = None, **boundary_kwargs
 ) -> tuple[pd.DataFrame, SplitManifest]:
-    v, t = compute_boundaries(questions["created_at"], **boundary_kwargs)
-    df = questions[["question_id", "created_at"]].copy()
+    # Boundaries come from research-window questions only; context questions fetched by id (older
+    # duplicate targets) are assigned by creation time but must not shift the quantiles.
+    if "in_research_window" not in questions:
+        questions = questions.assign(in_research_window=True)
+    in_window = questions["in_research_window"].astype(bool)
+    v, t = compute_boundaries(questions.loc[in_window, "created_at"], **boundary_kwargs)
+    df = questions[["question_id", "created_at", "in_research_window"]].copy()
     df["split"] = assign_splits(df["created_at"], v, t)
+    win = df[df["in_research_window"]]
     manifest = SplitManifest(
         val_start=v.isoformat(),
         test_start=t.isoformat(),
-        counts={s: int((df["split"] == s).sum()) for s in ("train", "val", "test")},
+        counts={s: int((win["split"] == s).sum()) for s in ("train", "val", "test")}
+        | {"context_outside_window": int((~df["in_research_window"]).sum())},
         ranges={
-            s: [g["created_at"].min().isoformat(), g["created_at"].max().isoformat()] for s, g in df.groupby("split")
+            s: [g["created_at"].min().isoformat(), g["created_at"].max().isoformat()] for s, g in win.groupby("split")
         },
         question_ids_sha={s: _ids_sha(g["question_id"]) for s, g in df.groupby("split")},
         source_snapshot_id=snapshot,
     )
-    return df[["question_id", "split"]], manifest
+    return df[["question_id", "split", "in_research_window"]], manifest
 
 
 def run_splits(processed_dir: Path, **boundary_kwargs) -> SplitManifest:
-    questions = pd.read_parquet(processed_dir / "questions.parquet", columns=["question_id", "created_at"])
+    questions = pd.read_parquet(
+        processed_dir / "questions.parquet", columns=["question_id", "created_at", "in_research_window"]
+    )
     manifest_path = processed_dir / "manifest.json"
     snapshot = json.loads(manifest_path.read_text())["snapshot_id"] if manifest_path.exists() else None
     splits, manifest = make_splits(questions, snapshot, **boundary_kwargs)

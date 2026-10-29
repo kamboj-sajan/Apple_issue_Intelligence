@@ -40,6 +40,7 @@ pytest -q                                              # offline tests on synthe
 aii ingest                 # fetch questions by month since 2019-01-01 (configs/pipeline.yaml); resumable
 aii ingest --max-requests 50 --start 2024-01-01   # smaller run
 aii update                 # re-fetch questions with new activity (edits, duplicate closures)
+aii fetch-linked           # fetch duplicate/linked targets outside the window (context only)
 aii preprocess             # raw pages -> data/processed/*.parquet + manifest.json
 aii split                  # time-based train/val/test split + split_manifest.json
 aii status                 # checkpoint and snapshot summary
@@ -55,7 +56,8 @@ With a free key from [stackapps.com](https://stackapps.com/apps/oauth/register),
 data/
 ├── raw/stackexchange/apple/questions/
 │   ├── creation/<YYYY-MM>/page_0001.json.gz      # verbatim API pages + request metadata
-│   └── activity/activity_<run>/page_0001.json.gz # incremental updates
+│   ├── activity/activity_<run>/page_0001.json.gz # incremental updates
+│   └── by_id/ids_<run>/page_0001.json.gz         # linked questions fetched by id
 ├── state/ingest_apple.json                       # checkpoint: chunk progress, update watermark, run log
 └── processed/
     ├── questions.parquet          # one row per question (latest version), UTC timestamps

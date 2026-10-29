@@ -34,6 +34,7 @@ TS_FIELDS = {
     "last_edit_date": "last_edit_at",
     "closed_date": "closed_at",
 }
+WINDOW_KINDS = {"creation", "activity"}
 INT_FIELDS = ["score", "view_count", "answer_count", "accepted_answer_id"]
 
 
@@ -97,6 +98,11 @@ def normalize_questions(
     items = items[valid].copy()
     items["question_id"] = items["question_id"].astype("int64")
 
+    # Questions seen via creation-window or activity crawls are in the research window; questions
+    # fetched only by id (e.g. older duplicate targets) are context for link prediction and must be
+    # excluded from volume statistics.
+    kinds = items["_source_file"].str.split("/").str[0]
+    window_ids = set(items.loc[kinds.isin(WINDOW_KINDS), "question_id"])
     items, collapsed = deduplicate_versions(items)
     quality["collapsed_versions"] = int(collapsed)
     n = len(items)
@@ -128,6 +134,7 @@ def normalize_questions(
     q["n_versions"] = items["n_versions"].to_numpy()
     q["fetched_at"] = pd.to_datetime(items["_fetched_at"], utc=True).to_numpy()
     q["source_file"] = items["_source_file"].to_numpy()
+    q["in_research_window"] = q["question_id"].isin(window_ids)
     q["week_start"] = q["created_at"].dt.tz_localize(None).dt.to_period("W-SUN").dt.start_time.dt.tz_localize(UTC)
 
     # Exact-content duplicates (re-posts), distinct from community duplicate closures.
@@ -187,6 +194,7 @@ def normalize_questions(
         empty_title=int((q["title"] == "").sum()),
         empty_body=int((q["body_text"] == "").sum()),
         content_duplicates=int(q["is_content_duplicate"].sum()),
+        context_questions_outside_window=int((~q["in_research_window"]).sum()),
         closed_as_duplicate=int(q["is_closed_duplicate"].sum()),
     )
     return q, links, entities, quality

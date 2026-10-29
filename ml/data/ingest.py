@@ -216,3 +216,36 @@ class Ingestor:
         except ApiError as exc:
             summary.stopped_reason = f"api_error: {exc}"
         return self._finish(summary)
+
+    def ingest_ids(self, question_ids: list[int], batch_size: int = 100) -> RunSummary:
+        """Fetch specific questions (e.g. duplicate targets created before the research window).
+
+        Ids already fetched, or confirmed missing (deleted/inaccessible), are skipped on later runs.
+        """
+        state = self.checkpoint.state.setdefault("by_id", {"fetched": [], "missing": []})
+        done = set(state["fetched"]) | set(state["missing"])
+        todo = sorted({int(i) for i in question_ids} - done)
+        summary = RunSummary(uuid.uuid4().hex[:12], "by_id", datetime.now(UTC).isoformat())
+        try:
+            for n, start in enumerate(range(0, len(todo), batch_size), start=1):
+                if reason := self._budget_reason(summary):
+                    summary.stopped_reason = reason
+                    return self._finish(summary)
+                ids = todo[start : start + batch_size]
+                resp = self.client.get(f"questions/{';'.join(map(str, ids))}", {"pagesize": batch_size})
+                summary.requests += 1
+                summary.pages += 1
+                summary.items += len(resp.items)
+                summary.quota_remaining = resp.quota_remaining
+                self.store.write_page(
+                    "by_id", f"ids_{summary.run_id}", n, {"method": resp.method, **resp.params}, resp.payload
+                )
+                got = {int(item["question_id"]) for item in resp.items}
+                state["fetched"].extend(sorted(got))
+                state["missing"].extend(sorted(set(ids) - got))
+                self.checkpoint.save()
+        except QuotaExhausted as exc:
+            summary.stopped_reason = f"quota_exhausted: {exc}"
+        except ApiError as exc:
+            summary.stopped_reason = f"api_error: {exc}"
+        return self._finish(summary)

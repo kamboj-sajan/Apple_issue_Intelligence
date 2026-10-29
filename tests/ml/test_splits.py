@@ -41,3 +41,20 @@ def test_explicit_boundaries_and_validation(questions):
     assert v == pd.Timestamp("2023-09-04T00:00Z") and t == pd.Timestamp("2023-10-30T00:00Z")
     with pytest.raises(ValueError):
         compute_boundaries(questions["created_at"], train_fraction=0.9, val_fraction=0.2)
+
+
+def test_context_questions_do_not_shift_boundaries(questions):
+    _, base = make_splits(questions)
+    old = pd.DataFrame(
+        {
+            "question_id": np.arange(1000, 1400),
+            "created_at": pd.Timestamp("2015-01-01", tz="UTC") + pd.to_timedelta(np.arange(400), unit="D"),
+            "in_research_window": False,
+        }
+    )
+    combined = pd.concat([questions.assign(in_research_window=True), old], ignore_index=True)
+    splits, m = make_splits(combined)
+    assert (m.val_start, m.test_start) == (base.val_start, base.test_start)
+    assert m.counts["context_outside_window"] == 400
+    assert m.counts["train"] == base.counts["train"]
+    assert (splits.loc[splits["question_id"] >= 1000, "split"] == "train").all()

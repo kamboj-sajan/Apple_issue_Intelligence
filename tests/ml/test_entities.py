@@ -42,3 +42,8 @@ def test_categories_primary_and_uncategorized(extractor):
     assert primary == "battery-power"
     assert {"battery-power", "update-install"} <= {c.value for c in cats}
     assert extractor.categorize([], "Which font does this logo use?") == ([], "uncategorized")
+
+
+def test_bare_hex_and_uninformative_codes_are_ignored(extractor):
+    m = extractor.extract({"code": "rax: 0x00000000ff000000 rbx: 0xff000000 error 0 Error: 1 error -69743"})
+    assert values(m, "error") == {"error:-69743"}

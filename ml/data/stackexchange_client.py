@@ -83,7 +83,7 @@ class StackExchangeClient:
         self._sleep = sleep
         self._clock = clock
         self._last_request_at: float | None = None
-        self._not_before: dict[str, float] = {}  # per-method backoff deadlines
+        self._not_before: dict[str, float] = {}  # backoff deadlines per base method (e.g. 'questions')
         self.requests_made = 0
         self.quota_remaining: int | None = None
 
@@ -92,7 +92,7 @@ class StackExchangeClient:
         wait = 0.0
         if self._last_request_at is not None:
             wait = max(wait, self._last_request_at + self.min_interval - now)
-        wait = max(wait, self._not_before.get(method, 0.0) - now)
+        wait = max(wait, self._not_before.get(method.split("/")[0], 0.0) - now)
         if wait > 0:
             self._sleep(wait)
 
@@ -130,7 +130,7 @@ class StackExchangeClient:
             self.quota_remaining = payload.get("quota_remaining", self.quota_remaining)
             if payload.get("backoff"):
                 log.info("API requested backoff of %ss for %s", payload["backoff"], method)
-                self._not_before[method] = self._clock() + float(payload["backoff"])
+                self._not_before[method.split("/")[0]] = self._clock() + float(payload["backoff"])
             return ApiResponse(method=method, params=public_params, payload=payload)
 
         raise ApiError(f"exhausted retries for {method}")  # pragma: no cover - loop always returns

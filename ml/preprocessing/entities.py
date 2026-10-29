@@ -33,6 +33,7 @@ class EntityExtractor:
         self.os_named = [(re.compile(o["pattern"], FLAGS), o["value"]) for o in os_cfg.get("named", [])]
         self.os_numeric = [(o["os"], re.compile(o["pattern"], FLAGS)) for o in os_cfg.get("numeric", [])]
         self.errors = [(e["prefix"], re.compile(e["pattern"], FLAGS)) for e in config.get("error_codes", [])]
+        self.error_ignore = [re.compile(f"^(?:{p})$", FLAGS) for p in config.get("error_code_ignore", [])]
         self.tech = [
             (name, [re.compile(p, FLAGS) for p in pats]) for name, pats in config.get("technical_entities", {}).items()
         ]
@@ -82,7 +83,9 @@ class EntityExtractor:
                     add(EntityMatch("os", value, m.group(0), fname, pat.pattern))
             for prefix, pat in self.errors:
                 for m in pat.finditer(text):
-                    add(EntityMatch("error", f"{prefix}:{m.group('code').lower()}", m.group(0), fname, pat.pattern))
+                    code = m.group("code").lower()
+                    if not any(ig.match(code) for ig in self.error_ignore):
+                        add(EntityMatch("error", f"{prefix}:{code}", m.group(0), fname, pat.pattern))
             for name, pats in self.tech:
                 for pat in pats:
                     for m in pat.finditer(text):
