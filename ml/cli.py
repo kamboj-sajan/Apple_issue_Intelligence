@@ -246,6 +246,59 @@ def cmd_link_predict(cfg: Config, args: argparse.Namespace) -> dict:
     return {k: report[k] for k in ("counts", "selection", "selected_config", "graphsage_seed_mrr", "total_seconds")}
 
 
+def _drift_inputs(cfg: Config):
+    import pandas as pd
+
+    from ml.drift.pipeline import DriftConfig
+    from ml.retrieval.embeddings import load_or_compute
+
+    q = pd.read_parquet(cfg.paths.processed / "questions.parquet")
+    emb, ids = load_or_compute(
+        q, cfg.paths.artifacts, _snapshot(cfg), cfg.raw.get("retrieval", {}).get("embedding_model")
+    )
+    return emb, ids, DriftConfig(**cfg.raw.get("drift", {})), cfg.paths.artifacts / "drift" / _snapshot(cfg)
+
+
+def cmd_drift(cfg: Config, args: argparse.Namespace) -> dict:
+    import pandas as pd
+
+    from ml.drift.pipeline import run_drift
+
+    emb, ids, dcfg, out = _drift_inputs(cfg)
+    sig = cfg.paths.artifacts / "anomalies" / _snapshot(cfg) / "signals.parquet"
+    return run_drift(cfg.paths.processed, emb, ids, out, dcfg, pd.read_parquet(sig) if sig.exists() else None)
+
+
+def cmd_drift_eval(cfg: Config, args: argparse.Namespace) -> dict:
+    import pandas as pd
+
+    from ml.drift.evaluation import injected_drift_power, no_drift_false_alarms
+    from ml.drift.pipeline import question_features
+
+    emb, ids, dcfg, out = _drift_inputs(cfg)
+    summary = json.loads((out / "summary.json").read_text())
+    thresholds = summary["thresholds_z"]
+    calib_end = pd.Period(summary["calibration_end"], "M")
+    P = cfg.paths.processed
+    clusters = pd.read_parquet(P / "clusters.parquet").set_index("question_id")["cluster"]
+    feats = question_features(
+        pd.read_parquet(P / "questions.parquet"), pd.read_parquet(P / "question_entities.parquet"), clusters
+    )
+    E = emb[pd.Series(range(len(ids)), index=ids).loc[feats["question_id"]].to_numpy()]
+    fa = no_drift_false_alarms(feats, E, thresholds, calib_end, dcfg, n_months=args.months)
+    pw = injected_drift_power(feats, E, thresholds, dcfg, trials=args.trials)
+    fa.to_csv(out / "eval_no_drift.csv", index=False)
+    pw.to_csv(out / "eval_injected.csv", index=False)
+    return {
+        "false_alarm_rate_by_metric": fa.groupby("metric")["alert"].mean().round(3).to_dict(),
+        "power_by_fraction_metric": pw.groupby(["fraction", "metric"])["alert"]
+        .mean()
+        .round(2)
+        .unstack()
+        .to_dict("index"),
+    }
+
+
 def cmd_status(cfg: Config, args: argparse.Namespace) -> dict:
     ckpt = Checkpoint(cfg.paths.state / f"ingest_{cfg.source['site']}.json").state
     chunks = ckpt["chunks"]
@@ -279,6 +332,8 @@ COMMANDS = {
     "graph-neighbors": (cmd_graph_neighbors, "Show typed neighbours of a graph node."),
     "ppi-reproduce": (cmd_ppi_reproduce, "Reproduce supervised GraphSAGE-mean on PPI (paper Table 1)."),
     "link-predict": (cmd_link_predict, "Train GraphSAGE link prediction and compare with baselines."),
+    "drift": (cmd_drift, "Monthly semantic/categorical drift with calibrated alerts."),
+    "drift-eval": (cmd_drift_eval, "Controlled drift tests: no-drift false alarms and injected-topic power."),
     "status": (cmd_status, "Show ingestion checkpoint and processed snapshot."),
 }
 
@@ -322,6 +377,9 @@ def build_parser() -> argparse.ArgumentParser:
             sp.add_argument("--epochs", type=int, default=40)
             sp.add_argument("--grid-size", type=int, default=7, help="how many grid configs to try on validation")
             sp.add_argument("--lr", type=float, default=3e-3)
+        if name == "drift-eval":
+            sp.add_argument("--months", type=int, default=20, help="calibration months for the no-drift test")
+            sp.add_argument("--trials", type=int, default=15, help="trials per injected fraction")
         if name == "retrieval-eval":
             sp.add_argument("--no-embeddings", action="store_true", help="BM25 only")
     return p

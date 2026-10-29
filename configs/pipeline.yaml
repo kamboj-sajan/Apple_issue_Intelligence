@@ -61,3 +61,11 @@ graph:
   temporal_max_per_question: 5
   temporal_tau_days: 3
   generic_max_df: 0.05          # entities/tags on >5% of questions are too generic for temporal edges
+
+drift:
+  reference_windows: 3        # trailing months pooled as the reference sample
+  max_sample: 300             # both samples subsampled to the same size (removes sample-size effects)
+  min_sample: 50              # months with fewer questions are "insufficient data"
+  n_perm: 100                 # permutation null draws per metric and month
+  alert_quantile: 0.95        # threshold = this quantile of z over calibration months (before val split)
+  alert_p: 0.01
