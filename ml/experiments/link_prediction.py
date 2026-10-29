@@ -112,12 +112,17 @@ def _env() -> dict:
     }
 
 
-def _mlflow(tracking_dir: Path):
+MLFLOW_EXPERIMENT = "ask-different-link-prediction"
+
+
+def _mlflow(db_path: Path):
+    """MLflow with a SQLite backend (MLflow 3 no longer accepts the ./mlruns file store)."""
     try:
         import mlflow
 
-        mlflow.set_tracking_uri(tracking_dir.resolve().as_uri())
-        mlflow.set_experiment("ask-different-link-prediction")
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        mlflow.set_tracking_uri(f"sqlite:///{db_path.resolve()}")
+        mlflow.set_experiment(MLFLOW_EXPERIMENT)
         return mlflow
     except Exception as exc:  # experiment tracking is optional; results are also written as files
         log.warning("mlflow unavailable (%s); continuing with file outputs only", exc)
@@ -177,7 +182,7 @@ def run(
         "test_positive_pairs": int(test_set.queries["relevant_pos"].map(len).sum()),
     }
     log.info("counts %s", counts)
-    mlflow = _mlflow(artifacts.parent / "mlruns")
+    mlflow = _mlflow(artifacts.parent / "mlflow.db")
     ckpt_dir = artifacts / "models" / snapshot
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
@@ -381,3 +386,41 @@ def _plot(ranking: pd.DataFrame, out_dir: Path) -> None:
     fig.tight_layout()
     fig.savefig(out_dir / "mrr_comparison.png", dpi=150)
     plt.close(fig)
+
+
+def backfill_mlflow(report_path: Path, db_path: Path) -> int:
+    """Log a finished run's recorded results (``report.json``) to MLflow, tagged as a backfill.
+
+    Used for runs made while MLflow logging was unavailable; values come only from the report.
+    """
+    mlflow = _mlflow(db_path)
+    if mlflow is None:
+        raise RuntimeError("mlflow unavailable")
+    report = json.loads(Path(report_path).read_text())
+    n = 0
+    common = {
+        "snapshot": report["snapshot_id"],
+        "embedding_model": report["embedding_model"],
+        **{f"n_{k}": v for k, v in report["counts"].items()},
+    }
+    for sel in report["selection"]:
+        with mlflow.start_run(run_name=f"select-{sel['name']}"):
+            mlflow.set_tags({"source": "backfill_from_report_json", "stage": "selection"})
+            mlflow.log_params({**common, **{k: v for k, v in sel.items() if k in GRID_KEYS | {"name"}}})
+            mlflow.log_metrics({"best_val_mrr_weekly": sel["best_val_mrr_weekly"], "epochs_run": sel["epochs_run"]})
+        n += 1
+    for fr in report["final_runs"]:
+        with mlflow.start_run(run_name=f"final-seed{fr['seed']}"):
+            mlflow.set_tags({"source": "backfill_from_report_json", "stage": "final"})
+            mlflow.log_params(
+                {**common, **{k: v for k, v in report["selected_config"].items() if k != "extra"}, "seed": fr["seed"]}
+            )
+            for h in fr["history"]:
+                mlflow.log_metric("train_loss", h["loss"], step=h["epoch"])
+                if "val_mrr" in h:
+                    mlflow.log_metric("val_mrr_weekly", h["val_mrr"], step=h["epoch"])
+            mlflow.log_metric("best_val_mrr_weekly", fr["best_val_mrr_weekly"])
+            mlflow.log_metric("test_mrr", report["graphsage_seed_mrr"]["per_seed"][f"graphsage_seed{fr['seed']}"])
+            mlflow.log_artifact(str(report_path))
+        n += 1
+    return n

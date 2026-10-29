@@ -213,3 +213,73 @@ neighbours and bounded ego graphs, and community/bridge detection on a construct
 * PyTorch Geometric is installed (2.8.1). The PPI benchmark dataset downloads on first use.
 * Link-prediction graph: `to_networkx(..., include_label_edges=False)` plus training label edges
   with `known_at` before the validation boundary.
+
+## Milestone 5: GraphSAGE benchmark reproduction and link prediction (done)
+
+| Component | File |
+|-----------|------|
+| PPI reproduction (official sampler, concat mean aggregator) | `ml/experiments/ppi_reproduction.py` |
+| Link-prediction tensors, time filtering, label pairs | `ml/models/link_data.py` |
+| GraphSAGE link model, hard negatives, training, strict as-of scoring | `ml/models/graphsage_link.py` |
+| Selection grid, ablation, unified evaluation, MLflow, checkpoints | `ml/experiments/link_prediction.py` |
+| Jaccard graph heuristic | `ml/retrieval/graph_heuristic.py` |
+| Ranking/classification metrics, paired bootstrap | `ml/evaluation/link_eval.py` |
+
+### Benchmark reproduction ([benchmark_reproduction.md](benchmark_reproduction.md))
+
+PPI supervised micro-F1, GraphSAGE-mean: paper **0.598**. Ours, faithful to the official code:
+**0.580 ± 0.018** (5 seeds, 10 epochs). 50 epochs: 0.631 ± 0.012. PyG `SAGEConv` full-batch: 0.657 ± 0.023.
+
+### Ask Different link prediction ([link_prediction.md](link_prediction.md))
+
+603 test queries, all candidates earlier than the query, strict per-query as-of graph.
+
+| Method | MRR (all) | MRR (duplicates) | AP (sampled pairs) |
+|--------|-----------|------------------|--------------------|
+| BM25 | 0.341 | 0.306 | 0.201 |
+| Jaccard (entities) | 0.084 | 0.087 | 0.363 |
+| Embedding cosine | 0.435 | 0.408 | 0.494 |
+| GraphSAGE without message passing (ablation) | 0.436 | 0.405 | 0.547 |
+| **GraphSAGE** (3 seeds) | **0.441 ± 0.003** | **0.412** | **0.558–0.563** |
+
+* **Ranking:** GraphSAGE − embedding = +0.006 MRR [−0.005, +0.017]. **Not significant**, so H3 is not
+  supported for ranking.
+* **Pair classification:** GraphSAGE − embedding = +0.064 AP [0.050, 0.078]. Significant, but supervision
+  explains most of it: message passing on its own adds +0.012 AP [0.005, 0.017].
+* The original design (no text residual) reached only 0.306 validation MRR, against 0.421 for embeddings.
+  An ablation grid on validation showed the learned projection overfits and loses text similarity.
+  Adding the raw-text residual brought it level with embeddings.
+
+### Issues found and fixed
+
+* **Label leak in text:** links to other questions kept their anchor text (usually the linked
+  question's title), and those links are the labels. Fixed in pipeline 0.2.0. Baseline MRR fell by
+  0.06–0.10, and every number in this log now uses the fixed text.
+* **Time-unit bug:** pandas microsecond timestamps were compared with nanosecond cutoffs, so as-of
+  filtering let future edges through. Caught by a unit test before any reported run; fixed with `to_ns()`.
+* **CI:** the link-prediction tests need torch and PyG. CI installs the CPU-only torch wheel, and the
+  tests skip cleanly where the ML extras are missing.
+
+### Tests
+
+81 passed in total. Link-prediction tests cover: label edges and week nodes excluded from message
+passing; as-of filtering; a future edge not changing earlier embeddings; label-pair orientation;
+negatives excluding related pairs; Jaccard values; listwise loss vs manual softmax; identical pairs
+across methods; paired bootstrap; and the nanosecond conversion.
+
+### Known limitations
+
+* Question text is the latest revision (no revision history), so post-cutoff edits can leak into text
+  features for every method equally.
+* Classification metrics use sampled negatives that may include unlabelled duplicates, so they are
+  lower bounds.
+* Validation used week-level as-of graphs (faster); test used strict per-query time.
+* One ablation seed; the GraphSAGE − no-message-passing comparison would be stronger with 3 ablation seeds.
+
+## Milestone 6: Drift monitoring (done)
+
+See [drift_monitoring.md](drift_monitoring.md). In short: monthly windows, equal-size samples,
+permutation z-scores and thresholds calibrated on 2019–2022. Alerts line up with release months
+(Catalina 2019-10, WWDC 2023-06, "tahoe" 2025-09). Controlled tests: 0–5 % false alarms; 80 % detection
+of a 20 % topic surge; 100 % at 40 %. Semantic drift vs volume anomalies: ρ = 0.19 (mostly distinct signals).
+

@@ -16,7 +16,7 @@ semantic drift over time.
 | 2. Data pipeline | Done: 42,555 questions (2019-01 → 2026-10) + 2,541 linked context questions |
 | 3. Anomaly detection, BM25 and embedding baselines | Done: 21 FDR-controlled signals; embedding MRR 0.435 vs BM25 0.341 |
 | 4. Knowledge graph | Done: 47k nodes, 563k typed edges, 36 communities, time snapshots |
-| 5. GraphSAGE (benchmark reproduction and link prediction) | In progress: PPI reproduced (0.580 ± 0.018 vs paper 0.598) |
+| 5. GraphSAGE (benchmark reproduction and link prediction) | Done: PPI 0.580 ± 0.018 (paper 0.598); link MRR 0.441 vs embedding 0.435 (not significant) |
 | 6. Drift monitoring | Done: calibrated monthly alerts; 0 % false alarms, 80 % power at a 20 % topic surge |
 | 7. API and dashboard | Not started |
 | 8. Final validation | Not started |
@@ -59,9 +59,11 @@ aii graph                  # build, validate and analyse the knowledge graph
 aii graph-neighbors question:485393   # explore a node's typed neighbours
 aii drift                  # monthly semantic/categorical drift with calibrated alerts
 aii drift-eval             # controlled no-drift / injected-topic tests
+aii ppi-reproduce          # GraphSAGE benchmark reproduction (PPI, paper Table 1)
+aii link-predict           # GraphSAGE vs BM25 / embedding / Jaccard on related questions
 ```
 
-Results and caveats: [docs/milestones.md](docs/milestones.md). Graph schema: [docs/graph_schema.md](docs/graph_schema.md). Drift: [docs/drift_monitoring.md](docs/drift_monitoring.md).
+Results and caveats: [docs/milestones.md](docs/milestones.md). Graph schema: [docs/graph_schema.md](docs/graph_schema.md). Drift: [docs/drift_monitoring.md](docs/drift_monitoring.md). GraphSAGE: [docs/benchmark_reproduction.md](docs/benchmark_reproduction.md), [docs/link_prediction.md](docs/link_prediction.md).
 
 Without an API key the Stack Exchange quota is **300 requests/day** (100 questions each). The
 ingestion stops cleanly at the quota reserve and resumes from its checkpoint on the next run.
@@ -97,6 +99,8 @@ ml/            data pipeline and ML (runs without the API, database or frontend)
   retrieval/     BM25, embeddings, related-question index and explanations
   graph/         heterogeneous graph schema, construction, analysis, snapshots
   drift/         drift metrics, calibrated alerts, controlled evaluation
+  models/        GraphSAGE link prediction (PyTorch Geometric)
+  experiments/   PPI reproduction, link-prediction experiment
   evaluation/    ranking metrics and bootstrap CIs
 configs/       pipeline settings and transparent entity/category dictionaries
 docs/          research design, data policy, milestone log
