@@ -19,7 +19,7 @@ semantic drift over time.
 | 5. GraphSAGE (benchmark reproduction and link prediction) | Done: PPI 0.580 ± 0.018 (paper 0.598); link MRR 0.441 vs embedding 0.435 (not significant) |
 | 6. Drift monitoring | Done: calibrated monthly alerts; 0 % false alarms, 80 % power at a 20 % topic surge |
 | 7. API and dashboard | Done: FastAPI + PostgreSQL/pgvector serving real results; Next.js dashboard (6 pages) |
-| 8. Final validation | Not started |
+| 8. Final validation | Done: clean-clone reproduction, fixes from it, limitations and demo docs |
 
 Detailed progress and limitations: [docs/milestones.md](docs/milestones.md).
 
@@ -28,18 +28,22 @@ Detailed progress and limitations: [docs/milestones.md](docs/milestones.md).
 Requires Python 3.11+.
 
 ```bash
-python -m venv .venv && source .venv/bin/activate     # or: uv venv --python 3.12 .venv
+python -m venv .venv && source .venv/bin/activate     # or: uv venv --seed --python 3.12 .venv (--seed adds pip)
 pip install -e ".[dev,test]"
-cp .env.example .env                                   # optional: add STACKEXCHANGE_KEY
-pytest -q                                              # tests; API tests need PostgreSQL (skipped otherwise)
+cp .env.example .env                                   # add STACKEXCHANGE_KEY for real collection (see below)
+pytest -q                                              # pipeline tests; ML and API tests skip with a reason
 ```
+
+`pytest` reports why tests are skipped: the GraphSAGE tests need the `ml` extras, and the API tests need
+the `api` extras plus a reachable PostgreSQL (`docker compose up -d db`). With
+`pip install -e ".[api,ml,dev,test]"` and the database running, all tests run (101 at the last check).
 
 ## Run the dashboard
 
 **With Docker** (PostgreSQL + API + dashboard):
 
 ```bash
-docker compose up -d --build        # db on 127.0.0.1:5434, API on :8000, dashboard on :3000
+docker compose up -d --build        # db on 127.0.0.1:5434, API on :8000, dashboard on http://localhost:3000
 docker compose exec api python -m backend.app.cli load-demo   # synthetic demo data, clearly labelled
 # or, after running the pipeline (data/ is mounted into the API container):
 docker compose exec api python -m backend.app.cli load
@@ -97,10 +101,13 @@ aii ppi-reproduce          # GraphSAGE benchmark reproduction (PPI, paper Table 
 aii link-predict           # GraphSAGE vs BM25 / embedding / Jaccard on related questions
 ```
 
-Results and caveats: [docs/milestones.md](docs/milestones.md). Graph schema: [docs/graph_schema.md](docs/graph_schema.md). Drift: [docs/drift_monitoring.md](docs/drift_monitoring.md). GraphSAGE: [docs/benchmark_reproduction.md](docs/benchmark_reproduction.md), [docs/link_prediction.md](docs/link_prediction.md).
+Results and caveats: [docs/milestones.md](docs/milestones.md). All limitations in one place:
+[docs/limitations.md](docs/limitations.md). Guided tour: [docs/demo.md](docs/demo.md). Graph schema: [docs/graph_schema.md](docs/graph_schema.md). Drift: [docs/drift_monitoring.md](docs/drift_monitoring.md). GraphSAGE: [docs/benchmark_reproduction.md](docs/benchmark_reproduction.md), [docs/link_prediction.md](docs/link_prediction.md).
 
-Without an API key the Stack Exchange quota is **300 requests/day** (100 questions each). The
-ingestion stops cleanly at the quota reserve and resumes from its checkpoint on the next run.
+Without an API key the Stack Exchange quota is **300 requests/day per IP** (100 questions each). The
+ingestion stops cleanly at the quota reserve and resumes from its checkpoint on the next run. If a run
+collects nothing because the quota is used up, `aii ingest` exits with status 2 and says so. Later
+commands report the missing input and the step to run first, instead of a traceback (`-v` shows it).
 With a free key from [stackapps.com](https://stackapps.com/apps/oauth/register), the quota is 10,000 requests/day.
 
 ### Data layout (`data/`, git-ignored)

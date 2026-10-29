@@ -339,3 +339,65 @@ frontend lint and build job.
 * The dashboard has no authentication. Ports are bound to 127.0.0.1 in Compose; don't expose it publicly
   as is.
 
+## Milestone 8: Final validation (done)
+
+### Clean-checkout reproduction
+
+Fresh `git clone` from GitHub into an empty directory, a new **Python 3.11** environment (the minimum
+supported version; development used 3.12), its own data directory and database, following the README literally.
+
+| Step | Result |
+|------|--------|
+| Quick start (`pip install -e ".[dev,test]"`, `pytest`) | **Failed at first**, then fixed (see below); now 70 passed, 2 skipped with reasons |
+| Full extras (`.[api,ml,dev,test]`) + `pytest` | 100 passed (the clone predates the CLI test added here) |
+| `aii ingest --max-requests 50 --start 2024-01-01` → `preprocess` → `fetch-linked` → `split` → `embed` → `clusters` → `anomalies` → `anomaly-eval` → `retrieval-eval` → `graph` → `drift` → `drift-eval` | all 13 succeeded (about 95 s on the 2024–25 sample) |
+| `aii link-predict` (1 config, 1 seed, 4 epochs) and `aii ppi-reproduce` (1 seed, 2 epochs) | both succeeded (36 s and 16 s). Smoke configurations: their scores aren't comparable to the reported runs |
+| `aii-db load-demo` into a fresh database; API on another port | 8 endpoints 200, all labelled `demo` |
+| Dashboard `npm ci` → lint → build | succeeded |
+
+On the real snapshot, rerunning `aii preprocess` and `aii split` gave the **same snapshot id
+(`9e8dce73e94a`), identical split hashes, and byte-identical Parquet files**. All 16 headline numbers
+in the docs were checked against the artifact files and match.
+
+### Problems found and fixed
+
+* **The quick start's test run crashed.** `pytest` collects `backend/tests`, whose conftest imported
+  SQLAlchemy, which the quick-start extras don't install, so the whole run aborted at import. CI never saw
+  it because CI installs the API extras. The API tests now skip themselves with a reason when the extras
+  are missing.
+* **The README's `uv venv` alternative failed**, because uv environments have no pip by default. It now says `--seed`.
+* **A quota-limited ingestion looked like success.** With today's anonymous IP quota used up, `aii ingest`
+  collected nothing yet exited 0, and every later command crashed with a traceback. Now `ingest`/`update`/
+  `fetch-linked` exit with status 2 and an explanation when nothing was collected because of quota or API
+  errors, and other commands print "missing input, run `aii <step>` first" (tracebacks with `-v`). A test covers both.
+* **The Docker dashboard broke at `http://127.0.0.1:3000`.** Compose allowed only `http://localhost:3000`
+  in CORS, so every API call failed when the dashboard was opened via 127.0.0.1. Both origins are now
+  allowed. (Milestone 7's screenshots used a locally run API with the default, which allows both.)
+* **Security: `next@15.5.4` had published vulnerabilities** (CVE-2025-66478; `npm audit`: 1 critical,
+  2 high in production dependencies). Upgraded to the patched releases on the same lines (`next` and
+  `eslint-config-next` 15.5.28, `react`/`react-dom` 19.1.10; released 2026-10-14). `sharp` was updated by
+  `npm audit fix`, and Next's nested `postcss` is overridden to 8.5.32. `npm audit --omit=dev`: **0
+  vulnerabilities**. Lint, build and rendered pages were rechecked. Frontend dependencies are now pinned exactly.
+
+### Definition of done (spec section 16)
+
+| Requirement | Status |
+|-------------|--------|
+| Real public question data can be ingested reproducibly | **Met.** 42,555 questions + 2,541 context via the official API; checkpointed and resumable; verified from a clean clone. A fresh full collection needs a free API key (anonymous quota is 300 requests/day). |
+| Anomaly scores calculated from actual temporal data | **Met.** 1,484 groups × 409 weeks; 21 FDR-controlled signals; evaluated by injection and null calibration. |
+| Knowledge graph can be constructed and explored | **Met.** 47,333 nodes, 562,964 typed edges, validated schema, `as_of` snapshots, CLI/API/dashboard exploration. |
+| GraphSAGE trains and performs link prediction | **Met.** It does **not** beat embedding cosine on ranking (difference not significant); documented with ablations. |
+| BM25 and embedding baselines evaluated fairly | **Met.** Identical candidates and pairs, leakage-controlled IDF, bootstrap CIs, paired tests. |
+| Drift monitoring produces testable results | **Met.** Calibrated alerts; controlled no-drift and injected-surge tests. |
+| Standard GraphSAGE benchmark reproduction documented | **Met.** PPI 0.580 ± 0.018 vs the paper's 0.598, with deviations listed. |
+| API and dashboard display actual persisted outputs | **Met.** PostgreSQL/pgvector, real snapshot labelled `real`; verified in Docker. |
+| Automated tests pass or failures are documented | **Met.** 101 passed locally (all extras + PostgreSQL); CI runs Python 3.11/3.12 with a Postgres service, plus a frontend lint/build job. |
+| A new developer can follow the README and reproduce the main pipeline | **Met after the fixes above.** Verified from a clean clone. |
+
+### Remaining limitations
+
+See [limitations.md](limitations.md) for the full list. The most important ones:
+GraphSAGE doesn't improve ranking over embeddings; signals are discussion patterns, not defects; text is
+the latest revision; GraphSAGE serving is an approximation; the job runner is in-process; and the stack has
+no authentication. A walkthrough with real examples is in [demo.md](demo.md).
+
