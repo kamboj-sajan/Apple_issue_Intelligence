@@ -215,6 +215,37 @@ def cmd_graph_neighbors(cfg: Config, args: argparse.Namespace) -> dict:
     }
 
 
+def cmd_ppi_reproduce(cfg: Config, args: argparse.Namespace) -> dict:
+    from ml.experiments.ppi_reproduction import PPIConfig, run
+
+    configs = [PPIConfig(variant="faithful", epochs=args.epochs, seed=s) for s in range(args.seeds)]
+    configs += [PPIConfig(variant="faithful", epochs=args.long_epochs, seed=s) for s in range(args.long_seeds)]
+    configs += [PPIConfig(variant="pyg_fullbatch", epochs=args.epochs, seed=s) for s in range(args.pyg_seeds)]
+    report = run(cfg.paths.data_dir / "benchmarks", cfg.paths.artifacts / "benchmarks", configs)
+    return {k: report[k] for k in ("paper_micro_f1", "dataset", "summary", "environment")}
+
+
+def cmd_link_predict(cfg: Config, args: argparse.Namespace) -> dict:
+    from ml.experiments.link_prediction import GRID, run
+    from ml.models.graphsage_link import TrainConfig
+
+    base = TrainConfig(epochs=args.epochs, lr=args.lr)
+    grid = GRID[: args.grid_size]
+    model = cfg.raw.get("retrieval", {}).get("embedding_model")
+    out = cfg.paths.artifacts / "link_prediction" / _snapshot(cfg)
+    report = run(
+        cfg.paths.processed,
+        cfg.paths.artifacts,
+        _snapshot(cfg),
+        model,
+        out,
+        seeds=tuple(range(args.seeds)),
+        base=base,
+        grid=grid,
+    )
+    return {k: report[k] for k in ("counts", "selection", "selected_config", "graphsage_seed_mrr", "total_seconds")}
+
+
 def cmd_status(cfg: Config, args: argparse.Namespace) -> dict:
     ckpt = Checkpoint(cfg.paths.state / f"ingest_{cfg.source['site']}.json").state
     chunks = ckpt["chunks"]
@@ -246,6 +277,8 @@ COMMANDS = {
     "retrieval-eval": (cmd_retrieval_eval, "Evaluate BM25 and embedding related-question retrieval."),
     "graph": (cmd_graph, "Build, validate and analyse the heterogeneous knowledge graph."),
     "graph-neighbors": (cmd_graph_neighbors, "Show typed neighbours of a graph node."),
+    "ppi-reproduce": (cmd_ppi_reproduce, "Reproduce supervised GraphSAGE-mean on PPI (paper Table 1)."),
+    "link-predict": (cmd_link_predict, "Train GraphSAGE link prediction and compare with baselines."),
     "status": (cmd_status, "Show ingestion checkpoint and processed snapshot."),
 }
 
@@ -278,6 +311,17 @@ def build_parser() -> argparse.ArgumentParser:
             sp.add_argument("node_id")
             sp.add_argument("--edge-types", help="comma-separated edge types")
             sp.add_argument("--limit", type=int, default=20)
+        if name == "ppi-reproduce":
+            sp.add_argument("--epochs", type=int, default=10, help="paper/official default")
+            sp.add_argument("--seeds", type=int, default=5)
+            sp.add_argument("--long-epochs", type=int, default=50)
+            sp.add_argument("--long-seeds", type=int, default=3)
+            sp.add_argument("--pyg-seeds", type=int, default=3)
+        if name == "link-predict":
+            sp.add_argument("--seeds", type=int, default=3)
+            sp.add_argument("--epochs", type=int, default=40)
+            sp.add_argument("--grid-size", type=int, default=7, help="how many grid configs to try on validation")
+            sp.add_argument("--lr", type=float, default=3e-3)
         if name == "retrieval-eval":
             sp.add_argument("--no-embeddings", action="store_true", help="BM25 only")
     return p

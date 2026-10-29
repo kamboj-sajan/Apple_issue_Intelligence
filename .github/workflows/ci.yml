@@ -18,7 +18,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install
-        run: pip install -e ".[dev,test]"
+        # CPU-only torch keeps the install small (the default Linux wheel bundles CUDA).
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev,test]" torch-geometric
       - name: Lint
         run: |
           ruff check .

@@ -1,7 +1,9 @@
 # Milestone Log
 
-Numbers below come from actual runs on snapshot `3d642dc498c8` (collected 2026-10-29). Re-running the
-pipeline later will give a new snapshot and slightly different numbers.
+Numbers below come from actual runs on snapshot **`9e8dce73e94a`** (pipeline 0.2.0, data collected
+2026-10-29). Pipeline 0.1.0 (snapshot `3d642dc498c8`) kept the anchor text of links to other questions;
+that leaked link-prediction labels into the text and was fixed in Milestone 5 (see "Retrieval baselines").
+Re-running the pipeline later will give a new snapshot and slightly different numbers.
 
 ## Milestone 1: Research design (done)
 
@@ -72,16 +74,16 @@ the checkpoint, then one run with an app key. No retries or API errors occurred.
 
 ### Anomaly detection on real data
 
-1,485 issue groups (tags, tag pairs, OS versions, devices, error codes, technical entities,
+1,484 issue groups (tags, tag pairs, OS versions, devices, error codes, technical entities,
 categories and 40 semantic clusters) × 409 weeks. Every detector models a group's **share** of
 site-wide weekly volume, because Ask Different's total volume falls about 6× between 2019 and 2025.
 
-* **Negative binomial, FDR q ≤ 0.05:** 25 signals (21 spikes, 4 sustained). The rolling detector
-  alone flags 230 cells (uncorrected); PELT finds 160 change points.
+* **Negative binomial, FDR q ≤ 0.05:** 21 signals (17 spikes, 4 sustained). The rolling detector
+  alone flags 304 cells (uncorrected); PELT finds 173 change points.
 * The strongest signals line up with documented OS release weeks: macOS Catalina (week of 2019-10-07:
   124 questions vs 6.8 expected), macOS Big Sur (2020-11-09), and the September iOS releases in 2019,
-  2020 and 2023. Other signals include Boot Camp / Windows in mid-March 2020 and a Homebrew/Python
-  cluster spike in August 2022. These are plausibility checks, not ground truth.
+  2020 and 2023. Other signals include Boot Camp / Windows in mid-March 2020 (also as a semantic
+  cluster) and a backup-tag spike in August 2022. These are plausibility checks, not ground truth.
 * Annual release cycles are **not** modelled per group, so release weeks show up as signals. That is
   intended (they are real surges in discussion), but it means release-week signals aren't surprising.
 
@@ -91,19 +93,20 @@ Recall of injected anomalies:
 
 | Injection | Negative binomial (FDR) | Rolling robust z | Change point |
 |-----------|-------------------|------------------|--------------|
-| Spike ×2 | 0.15 | 0.31 | 0.03 |
-| Spike ×3 | 0.29 | 0.43 | 0.02 |
-| Spike ×5 | 0.64 | 0.66 | 0.12 |
-| Shift ×1.5 (8 wk) | 0.04 | 0.14 | 0.07 |
-| Shift ×2 | 0.19 | 0.40 | 0.22 |
-| Shift ×3 | 0.45 | 0.60 | 0.65 |
+| Spike ×2 | 0.16 | 0.27 | 0.01 |
+| Spike ×3 | 0.41 | 0.63 | 0.03 |
+| Spike ×5 | 0.68 | 0.68 | 0.08 |
+| Shift ×1.5 (8 wk) | 0.06 | 0.17 | 0.07 |
+| Shift ×2 | 0.21 | 0.43 | 0.22 |
+| Shift ×3 | 0.62 | 0.71 | 0.74 |
 
-* **Group size dominates.** Below 5 questions/week the negative binomial catches 10–14 % of injected
-  spikes; at 5–15/week it catches 60 %, and above 15/week 70 %. With FDR across ~1,500 groups, a few
+* **Group size dominates.** Below 5 questions/week the negative binomial catches 18 % of injected
+  spikes; at 5–15/week 64 %, and above 15/week 86 %. With FDR across ~1,500 groups, a few
   extra questions in a small group can't be told apart from noise.
-* **Spike vs sustained classification** of detected injections: 81–95 % correct for spikes, 58–89 % for shifts.
+* **Spike vs sustained classification** of detected injections: 84–96 % correct for spikes, 46–95 % for
+  shifts (weak shifts are often called spikes).
 * **Null calibration** (Poisson-simulated series, nominal p < 0.05): the negative binomial's
-  false-positive rate is **3.1 %**, so it is conservative (the discrete tail test). The rolling z's is **6.7 %**,
+  false-positive rate is **3.1 %**, so it is conservative (the discrete tail test). The rolling z's is **6.8 %**,
   so its normal approximation flags too often. That is why the negative binomial with FDR drives
   the ranked signals and the rolling detector is only supporting evidence.
 * The change-point detector uses the whole series, so it only characterises signals and never raises alerts.
@@ -116,16 +119,22 @@ bootstrap 95 % CIs.
 
 | Stratum | Metric | BM25 | Embedding (MiniLM-L6-v2) |
 |---------|--------|------|-----------|
-| All queries | MRR | 0.438 [0.406, 0.472] | 0.494 [0.461, 0.529] |
-| | Hits@10 | 0.622 [0.584, 0.660] | 0.703 [0.668, 0.740] |
-| | Recall@10 | 0.584 [0.548, 0.623] | 0.669 [0.634, 0.707] |
-| Duplicate-labelled | MRR | 0.324 [0.278, 0.365] | 0.425 [0.379, 0.469] |
-| | Hits@10 | 0.497 [0.439, 0.547] | 0.669 [0.615, 0.716] |
-| | Recall@10 | 0.457 [0.402, 0.509] | 0.626 [0.572, 0.675] |
+| All queries | MRR | 0.341 [0.310, 0.372] | 0.435 [0.403, 0.469] |
+| | Hits@10 | 0.536 [0.498, 0.572] | 0.663 [0.627, 0.701] |
+| | Recall@10 | 0.495 [0.459, 0.533] | 0.626 [0.589, 0.663] |
+| Duplicate-labelled | MRR | 0.306 [0.264, 0.347] | 0.408 [0.364, 0.448] |
+| | Hits@10 | 0.476 [0.419, 0.527] | 0.666 [0.611, 0.713] |
+| | Recall@10 | 0.433 [0.379, 0.484] | 0.618 [0.564, 0.668] |
 
-Embeddings beat BM25 on duplicates, with non-overlapping CIs, because duplicates are often phrased
-differently. On all queries the CIs overlap slightly; a paired comparison comes in Milestone 5.
-Precision@10 is low by construction, since most queries have only one or two labelled positives.
+Embeddings beat BM25 in both strata with non-overlapping CIs. Precision@10 is low by construction,
+since most queries have only one or two labelled positives.
+
+**Correction (found in Milestone 5).** The first version of this table (pipeline 0.1.0) reported
+MRR 0.438 (BM25) and 0.494 (embedding) on all queries. Those numbers were inflated: a question that
+links to another question usually uses the linked question's **title** as the link text, and those
+links are the evaluation labels. Pipeline 0.2.0 replaces such links with `[linked question]`. MRR
+fell by 0.06–0.10, mostly on body-link queries, which confirms the leak. Duplicate-labelled queries
+changed less (0.324 → 0.306 for BM25, 0.425 → 0.408 for embeddings).
 
 ### Commands
 
@@ -154,25 +163,26 @@ tie-aware ranks, earlier-only candidates, and explanations.
 
 Schema and the reasoning behind each threshold: [graph_schema.md](graph_schema.md).
 
-### Results on snapshot `3d642dc498c8`
+### Results on snapshot `9e8dce73e94a`
 
 * **47,333 nodes**: 45,096 questions, 916 tags, 846 weeks, 308 error codes, 71 OS versions,
   49 devices, 34 technical entities, 13 categories.
-* **564,342 edges**, all 12 types, schema validation passed: semantic 167,477 · tag 132,501 ·
-  category 69,430 · temporal 54,751 · week 45,096 · device 34,464 · tech 33,540 · OS 20,926 ·
-  body-link labels 2,867 · duplicate labels 2,420 · error 856 · spike 14 (cluster and tag-pair signals
+* **562,964 edges**, all 12 types, schema validation passed: semantic 166,644 · tag 132,501 ·
+  category 69,322 · temporal 54,619 · week 45,096 · device 34,362 · tech 33,476 · OS 20,791 ·
+  body-link labels 2,867 · duplicate labels 2,420 · error 852 · spike 14 (cluster and tag-pair signals
   have no node type, so they're not represented).
-* **Question degree:** median 15, p90 32, max 145, so the graph is sparse by construction. No isolated nodes.
+* **Question degree:** median 15, p90 32, max 149, so the graph is sparse by construction. No isolated nodes.
 * **Question-question projection** (semantic + temporal edges): 90.2 % of questions in one giant
-  component; 3,755 questions have no semantic or temporal neighbour.
-* **39 Louvain communities** (≥ 10 questions), which are coherent: partitions/Boot Camp, startup/SSD,
-  browsers/keychain, audio/Bluetooth, Photos/iCloud, displays/Thunderbolt, Wi-Fi, Homebrew/terminal,
-  battery/charging, Time Machine, Mail, …
-* **Bridges:** an AirTag community linking iPhone and macOS questions; Wi-Fi and audio/Bluetooth
-  communities spanning iPhone and MacBook Pro; a Monterey printing community linking macOS 10.15, 11
-  and 12.
-* **Snapshots:** from 13,430 nodes and 121,662 edges (1 Jan 2020) to 47,333 and 564,342. The giant-component
-  share grows from 77 % to 90 %, and mean question degree from 13.2 to 17.6.
+  component; 3,787 questions have no semantic or temporal neighbour.
+* **36 Louvain communities** (≥ 10 questions), which are coherent: partitions/Boot Camp, startup/SSD,
+  Homebrew/terminal, browsers/keychain, displays/Thunderbolt, Photos/iCloud, keyboard/trackpad,
+  Wi-Fi, audio/Bluetooth, battery/charging, Time Machine, …
+* **Bridges:** Wi-Fi and audio/Bluetooth communities spanning iPhone and MacBook Pro; Photos/iCloud
+  linking iPhone and macOS questions; AppleScript automation linking Finder questions; communities
+  connecting macOS 10.15 and 13, and 12 and 13. (An AirTag bridge seen on the 0.1.0 snapshot didn't
+  survive the rebuild. Louvain communities shift between runs, so individual bridges are descriptive.)
+* **Snapshots:** from 13,430 nodes and 121,436 edges (1 Jan 2020) to 47,333 and 562,964. The giant-component
+  share grows from 77 % to 90 %, and mean question degree from 13.2 to 17.5.
 * **Example:** a December 2025 macOS Tahoe 26.2 question about the Safari sidebar in full screen is
   linked to its duplicate target, question 209114 (a much older question). It also has a
   semantic edge (cosine 0.82) and temporal edges to other Tahoe 26.2 questions from the same week.

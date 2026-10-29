@@ -14,9 +14,9 @@ semantic drift over time.
 |-----------|-------|
 | 1. Research design | Done: [docs/research_design.md](docs/research_design.md) |
 | 2. Data pipeline | Done: 42,555 questions (2019-01 → 2026-10) + 2,541 linked context questions |
-| 3. Anomaly detection, BM25 and embedding baselines | Done: 25 FDR-controlled signals; embedding MRR 0.494 vs BM25 0.438 |
-| 4. Knowledge graph | Done: 47k nodes, 564k typed edges, 39 communities, time snapshots |
-| 5. GraphSAGE (benchmark reproduction and link prediction) | Not started |
+| 3. Anomaly detection, BM25 and embedding baselines | Done: 21 FDR-controlled signals; embedding MRR 0.435 vs BM25 0.341 |
+| 4. Knowledge graph | Done: 47k nodes, 563k typed edges, 36 communities, time snapshots |
+| 5. GraphSAGE (benchmark reproduction and link prediction) | In progress: PPI reproduced (0.580 ± 0.018 vs paper 0.598) |
 | 6. Drift monitoring | Not started |
 | 7. API and dashboard | Not started |
 | 8. Final validation | Not started |

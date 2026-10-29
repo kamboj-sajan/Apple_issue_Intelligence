@@ -38,3 +38,14 @@ def test_question_link_extraction_ignores_answers_other_sites_and_self():
 def test_content_hash_is_case_and_whitespace_insensitive():
     assert content_hash("Title", "Body  text") == content_hash("title", "body text")
     assert content_hash("Title", "Body") != content_hash("Title", "Other")
+
+
+def test_question_link_anchor_text_is_removed_but_link_recorded():
+    body = (
+        '<p>Same as <a href="https://apple.stackexchange.com/questions/123/wifi-drops">Wi-Fi drops after update</a>'
+        ' see <a href="https://support.apple.com/kb">Apple docs</a></p>'
+    )
+    c = clean_html(body)
+    assert "Wi-Fi drops after update" not in c.text
+    assert "[linked question]" in c.text and "Apple docs" in c.text
+    assert c.question_links == [123]

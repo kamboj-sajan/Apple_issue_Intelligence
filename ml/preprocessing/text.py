@@ -78,11 +78,18 @@ def clean_html(body_html: str | None, self_id: int | None = None) -> CleanedBody
 
     ``<pre>`` blocks go to ``code`` (they often hold logs and error output); inline ``<code>``
     stays in the prose. Images become ``[image]`` placeholders.
+
+    Links to other Ask Different questions become ``[linked question]``: their anchor text is
+    usually the linked question's title, and those links are link-prediction *labels*, so keeping
+    the anchor text would leak the answer into every text-based method.
     """
     if not body_html:
         return CleanedBody("", "", [])
     soup = BeautifulSoup(body_html, "lxml")
     hrefs = [a.get("href", "") for a in soup.find_all("a")]
+    for a in soup.find_all("a"):
+        if extract_question_links([a.get("href", "")]):
+            a.replace_with(" [linked question] ")
     code_blocks = []
     for pre in soup.find_all("pre"):
         code_blocks.append(pre.get_text("\n"))
