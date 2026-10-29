@@ -18,7 +18,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install
-        run: pip install -e ".[dev]"
+        # Tests need the light scientific stack only (no torch / sentence-transformers downloads).
+        run: pip install -e ".[dev]" scipy scikit-learn statsmodels rank-bm25
       - name: Lint
         run: |
           ruff check .

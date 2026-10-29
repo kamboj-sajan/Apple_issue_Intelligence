@@ -1,6 +1,7 @@
 # Milestone Log
 
-Numbers below come from actual runs. They will change as ingestion continues.
+Numbers below come from actual runs on snapshot `3d642dc498c8` (collected 2026-10-29). Re-running the
+pipeline later will give a new snapshot and slightly different numbers.
 
 ## Milestone 1: Research design (done)
 
@@ -8,9 +9,7 @@ Numbers below come from actual runs. They will change as ingestion continues.
   evaluation protocols, GraphSAGE PPI reproduction plan (Table 1 numbers checked against the paper).
 * [data_policy.md](data_policy.md): licensing, attribution, API etiquette, privacy.
 
-## Milestone 2: Data pipeline (code done, collection partial)
-
-### What exists
+## Milestone 2: Data pipeline (done)
 
 | Component | File |
 |-----------|------|
@@ -21,74 +20,130 @@ Numbers below come from actual runs. They will change as ingestion continues.
 | Rule-based entities and categories | `ml/preprocessing/entities.py`, `configs/entities.yaml` |
 | Dedup, UTC timestamps, quality report, links table | `ml/preprocessing/normalize.py` |
 | Week-aligned temporal splits | `ml/preprocessing/splits.py` |
-| CLI | `ml/cli.py` (`aii ...`) |
 
-### First real ingestion (2026-10-29, anonymous quota)
+### Collection
+
+Collected over three runs: two anonymous runs that stopped at the 300/day quota and resumed from
+the checkpoint, then one run with an app key. No retries or API errors occurred.
 
 | Item | Value |
 |------|-------|
-| Raw pages stored | 282 |
-| Questions (unique) | 26,391 |
-| Created range | 2019-01-01 → 2021-12-15 (Dec 2021 partially collected) |
-| Months complete | 35 (2019-01 … 2021-11) |
-| Snapshot id | `f7a2cf045a3f` |
-| Questions closed as duplicate | 1,264 (1,439 duplicate links) |
-| Body links to other questions | 1,734 |
-| Link targets not yet in corpus | 1,828 unique ids (mostly pre-2019 canonical questions) |
-| Entity matches | device 32,085 · tech 33,987 · os 15,504 · category 41,149 · error 549 |
-| Uncategorised questions | 5,434 (20.6 %) |
-| Split (in-window) | train 18,423 · val 3,992 (from 2020-11-30) · test 3,976 (from 2021-05-24) |
-
-The run stopped at the quota reserve (`stopped_reason: quota_reserve`), as designed. No retries or
-errors occurred.
+| Raw pages | 505 |
+| Questions in research window | 42,555 (2019-01-01 → 2026-10-27) |
+| Context questions (linked targets fetched by id) | 2,541 |
+| Closed as duplicate | 2,140 questions → 2,452 duplicate links |
+| Body links to other questions | 3,014 |
+| Link targets present in corpus | 5,287 of 5,466 (97 %) |
+| Entity matches | category 69,430 · tech 59,023 · device 54,676 · os 26,950 · error 970 |
+| Uncategorised (no category rule fired) | 9,418 (20.9 %) |
+| Split (research window) | train 29,741 · val 6,415 (from 2022-06-27) · test 6,399 (from 2023-08-14) |
 
 ### Fixes made after inspecting real data
 
-* A bare 8-hex-digit "error code" rule matched memory addresses and register dumps in crash logs
-  (`0x00000000`, `0xff000000` were the most frequent "errors"). The rule was removed, and
-  uninformative codes (`0`, `1`, `-1`, all-zero hex) are now ignored. Error matches fell from
-  1,254 to 549, and the most frequent are now real codes (diskutil `-69743`, `-69877`, `NSPOSIXErrorDomain`).
-* Only 366 of 1,439 duplicate links pointed to a collected question. Added `aii fetch-linked`
-  (fetch by id, 100 per request). Such questions are flagged `in_research_window = False`, so they
-  serve as link-prediction context without inflating weekly volumes or shifting split boundaries.
+* A bare 8-hex-digit "error code" rule matched memory addresses and register dumps in crash logs.
+  It was removed, and uninformative codes (`0`, `1`, `-1`, all-zero hex) are ignored. The most
+  frequent codes are now real ones (diskutil `-69743`, `-69877`, `NSPOSIXErrorDomain`).
+* Initially only 25 % of duplicate links pointed to a collected question. `aii fetch-linked` now fetches
+  targets by id. They are flagged `in_research_window = False`, so they act as link-prediction context
+  without inflating volumes or shifting split boundaries.
+
+### Known limitations
+
+* The activity update ran right after collection and found 0 changed questions. Later edits and
+  duplicate closures need periodic `aii update` runs.
+* Body-link timing is conservative (last edit or creation), because the API doesn't say when a link was added.
+* Entity rules favour recall over precision (e.g. `terminal` matches the plain English word).
+* `content_license` is missing for 3,097 questions (the API omitted it).
+* Deleted questions vanish from pagination, so a resumed chunk can skip an item if page boundaries shift.
+
+## Milestone 3: Anomaly detection and retrieval baselines (done)
+
+| Component | File |
+|-----------|------|
+| Issue groups, weekly counts, site totals, partial weeks | `ml/anomaly_detection/aggregate.py` |
+| Rolling robust z, negative binomial, PELT change points, BH | `ml/anomaly_detection/detectors.py` |
+| Screening, quality flags, spike/sustained, evidence, ranking | `ml/anomaly_detection/pipeline.py` |
+| Injection study and null calibration | `ml/anomaly_detection/evaluation.py` |
+| Semantic clusters (k-means on train embeddings, c-TF-IDF terms) | `ml/preprocessing/clusters.py` |
+| BM25 (sparse; equal to `rank_bm25`, fit on pre-test questions) | `ml/retrieval/bm25.py` |
+| Sentence-transformer embeddings (local, cached) | `ml/retrieval/embeddings.py` |
+| Related-question index, explanations, evaluation | `ml/retrieval/related.py` |
+| Ranking metrics with exact ranks and bootstrap CIs | `ml/evaluation/ranking.py` |
+
+### Anomaly detection on real data
+
+1,485 issue groups (tags, tag pairs, OS versions, devices, error codes, technical entities,
+categories and 40 semantic clusters) × 409 weeks. Every detector models a group's **share** of
+site-wide weekly volume, because Ask Different's total volume falls about 6× between 2019 and 2025.
+
+* **Negative binomial, FDR q ≤ 0.05:** 25 signals (21 spikes, 4 sustained). The rolling detector
+  alone flags 230 cells (uncorrected); PELT finds 160 change points.
+* The strongest signals line up with documented OS release weeks: macOS Catalina (week of 2019-10-07:
+  124 questions vs 6.8 expected), macOS Big Sur (2020-11-09), and the September iOS releases in 2019,
+  2020 and 2023. Other signals include Boot Camp / Windows in mid-March 2020 and a Homebrew/Python
+  cluster spike in August 2022. These are plausibility checks, not ground truth.
+* Annual release cycles are **not** modelled per group, so release weeks show up as signals. That is
+  intended (they are real surges in discussion), but it means release-week signals aren't surprising.
+
+### Detector evaluation (400 injection trials into real series; seed 13)
+
+Recall of injected anomalies:
+
+| Injection | Negative binomial (FDR) | Rolling robust z | Change point |
+|-----------|-------------------|------------------|--------------|
+| Spike ×2 | 0.15 | 0.31 | 0.03 |
+| Spike ×3 | 0.29 | 0.43 | 0.02 |
+| Spike ×5 | 0.64 | 0.66 | 0.12 |
+| Shift ×1.5 (8 wk) | 0.04 | 0.14 | 0.07 |
+| Shift ×2 | 0.19 | 0.40 | 0.22 |
+| Shift ×3 | 0.45 | 0.60 | 0.65 |
+
+* **Group size dominates.** Below 5 questions/week the negative binomial catches 10–14 % of injected
+  spikes; at 5–15/week it catches 60 %, and above 15/week 70 %. With FDR across ~1,500 groups, a few
+  extra questions in a small group can't be told apart from noise.
+* **Spike vs sustained classification** of detected injections: 81–95 % correct for spikes, 58–89 % for shifts.
+* **Null calibration** (Poisson-simulated series, nominal p < 0.05): the negative binomial's
+  false-positive rate is **3.1 %**, so it is conservative (the discrete tail test). The rolling z's is **6.7 %**,
+  so its normal approximation flags too often. That is why the negative binomial with FDR drives
+  the ranked signals and the rolling detector is only supporting evidence.
+* The change-point detector uses the whole series, so it only characterises signals and never raises alerts.
+
+### Retrieval baselines (test split)
+
+603 test queries (296 with a duplicate-closure label). Candidates are every question created before
+the query (~36k–45k). BM25 IDF is fit only on questions before 2023-08-14. Values are means with
+bootstrap 95 % CIs.
+
+| Stratum | Metric | BM25 | Embedding (MiniLM-L6-v2) |
+|---------|--------|------|-----------|
+| All queries | MRR | 0.438 [0.406, 0.472] | 0.494 [0.461, 0.529] |
+| | Hits@10 | 0.622 [0.584, 0.660] | 0.703 [0.668, 0.740] |
+| | Recall@10 | 0.584 [0.548, 0.623] | 0.669 [0.634, 0.707] |
+| Duplicate-labelled | MRR | 0.324 [0.278, 0.365] | 0.425 [0.379, 0.469] |
+| | Hits@10 | 0.497 [0.439, 0.547] | 0.669 [0.615, 0.716] |
+| | Recall@10 | 0.457 [0.402, 0.509] | 0.626 [0.572, 0.675] |
+
+Embeddings beat BM25 on duplicates, with non-overlapping CIs, because duplicates are often phrased
+differently. On all queries the CIs overlap slightly; a paired comparison comes in Milestone 5.
+Precision@10 is low by construction, since most queries have only one or two labelled positives.
 
 ### Commands
 
 ```bash
-aii ingest            # continue the creation crawl (resumes at 2021-12 page 4)
-aii fetch-linked      # ~19 requests for the missing link targets
-aii update            # activity-based refresh (captures later duplicate closures)
-aii preprocess && aii split
-pytest -q             # 33 tests
+aii embed && aii clusters --k 40
+aii anomalies                 # signals, detections, change points, series -> data/artifacts/anomalies/<snapshot>/
+aii anomaly-eval --trials 400 # injection study + null calibration
+aii retrieval-eval            # BM25 vs embedding on the test split
 ```
 
 ### Tests
 
-33 passed (`pytest -q`); `ruff check` and `ruff format --check` clean. Covered: client retries,
-backoff, throttling and key redaction; pagination; checkpoint resume; idempotent re-runs; activity
-updates; by-id fetching; HTML/Unicode cleanup; link extraction; entity rules; dedup; UTC
-handling; missing values; research-window flags; split ordering, week alignment and determinism.
+52 passed. Anomaly tests use synthetic series with known structure: share model vs site decline,
+past-only baselines, sparse-group handling, PELT shift vs spike, offset invariance, BH vs statsmodels,
+end-to-end ranking, and deterministic evaluation. Retrieval tests check BM25 against `rank_bm25`,
+tie-aware ranks, earlier-only candidates, and explanations.
 
-### Known limitations
+### Prerequisites for Milestone 4
 
-* **Collection incomplete:** 2021-12 onwards is not yet collected. At the anonymous 300/day quota
-  the rest of 2019–2026 needs about one more day; an app key makes it a single run.
-* **Activity update mode is untested on live data** (only on fixtures). Until it runs, duplicate
-  closures that happened after a page was fetched are missing.
-* **Body-link timing is conservative:** a link is assumed to exist from the question's last edit (or
-  creation), because the API does not expose when a link was added.
-* **Rules are high-recall, imperfect precision:** e.g. `terminal` also matches the word in prose; "error 2"
-  is generic. Rule hits are evidence for explanations, not ground truth.
-* `content_license` is missing for 1,774 questions (the API omitted it); those default to the site licence.
-* The first ISO week (2018-12-31) contains only part of the week's questions. Aggregation must treat
-  edge weeks as partial.
-* Deleted questions disappear from pagination; a resumed chunk could skip an item if a deletion shifts
-  page boundaries between runs. Rare, and a later `update` run reconciles it.
-
-### Prerequisites for Milestone 3
-
-1. Finish collection through the present (`aii ingest` over 1–2 quota days) and run `aii fetch-linked`
-   and `aii update`.
-2. Install ML extras: `pip install -e ".[ml]"` (statsmodels, scipy, sentence-transformers, rank-bm25).
-3. Choose the sentence-transformer model (plan: `all-MiniLM-L6-v2`, local inference) and cache embeddings
-   keyed by snapshot id.
+* Embeddings, clusters and links exist for snapshot `3d642dc498c8`.
+* The graph needs semantic kNN edges restricted to earlier questions, plus link edges filtered by `known_at`.

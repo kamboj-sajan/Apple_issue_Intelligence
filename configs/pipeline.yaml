@@ -33,3 +33,22 @@ splits:
   test_start: null
 
 time_window: W-MON  # pandas offset alias for weekly windows starting Monday
+
+anomaly:
+  detector:
+    lookback_weeks: 26        # strictly past weeks used for the baseline
+    min_history_weeks: 12     # weeks with site volume > 0 required inside the lookback
+    min_expected: 2.0         # expected count below this => "insufficient data", not scored
+  fdr_q: 0.05                 # Benjamini-Hochberg level across groups tested in the same week
+  min_observed: 5
+  min_rel_change: 0.5
+  min_group_total: 20         # groups with fewer questions overall are not tested
+  min_tagpair_support: 30
+  rolling_z: 3.0
+  cp_min_group_total: 100
+  cp_min_size: 4
+  cp_min_rel_increase: 0.25
+  follow_up_weeks: 3
+
+retrieval:
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2

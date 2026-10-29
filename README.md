@@ -13,8 +13,8 @@ semantic drift over time.
 | Milestone | State |
 |-----------|-------|
 | 1. Research design | Done: [docs/research_design.md](docs/research_design.md) |
-| 2. Data pipeline | Code and tests done; real ingestion run in progress (quota-limited) |
-| 3. Anomaly detection, BM25 and embedding baselines | Not started |
+| 2. Data pipeline | Done: 42,555 questions (2019-01 → 2026-10) + 2,541 linked context questions |
+| 3. Anomaly detection, BM25 and embedding baselines | Done: 25 FDR-controlled signals; embedding MRR 0.494 vs BM25 0.438 |
 | 4. Knowledge graph | Not started |
 | 5. GraphSAGE (benchmark reproduction and link prediction) | Not started |
 | 6. Drift monitoring | Not started |
@@ -46,6 +46,19 @@ aii split                  # time-based train/val/test split + split_manifest.js
 aii status                 # checkpoint and snapshot summary
 ```
 
+## Analysis (Milestone 3)
+
+```bash
+pip install -e ".[ml]"
+aii embed                  # sentence-transformer embeddings (local, cached per snapshot)
+aii clusters --k 40        # semantic clusters fit on the train split
+aii anomalies              # weekly anomaly signals with FDR control
+aii anomaly-eval           # injection study + null calibration
+aii retrieval-eval         # BM25 vs embedding related-question retrieval
+```
+
+Results and caveats: [docs/milestones.md](docs/milestones.md).
+
 Without an API key the Stack Exchange quota is **300 requests/day** (100 questions each). The
 ingestion stops cleanly at the quota reserve and resumes from its checkpoint on the next run.
 With a free key from [stackapps.com](https://stackapps.com/apps/oauth/register), the quota is 10,000 requests/day.
@@ -75,7 +88,10 @@ Processed tables are always rebuilt from raw pages; nothing is edited in place.
 ```
 ml/            data pipeline and ML (runs without the API, database or frontend)
   data/          Stack Exchange client, checkpointed ingestion, raw store
-  preprocessing/ HTML cleanup, entity extraction, normalisation, temporal splits
+  preprocessing/ HTML cleanup, entity extraction, normalisation, temporal splits, clusters
+  anomaly_detection/ weekly aggregation, detectors, FDR screening, evaluation
+  retrieval/     BM25, embeddings, related-question index and explanations
+  evaluation/    ranking metrics and bootstrap CIs
 configs/       pipeline settings and transparent entity/category dictionaries
 docs/          research design, data policy, milestone log
 tests/         pytest suite (synthetic fixtures only; no network)
