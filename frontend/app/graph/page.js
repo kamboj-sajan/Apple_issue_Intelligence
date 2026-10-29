@@ -58,9 +58,11 @@ function GraphInner() {
   const params = useSearchParams();
   const [center, setCenter] = useState(params.get("node") || "tag:wifi");
   const [input, setInput] = useState(center);
-  const [depth, setDepth] = useState(1);
-  const [perNode, setPerNode] = useState(20);
-  const [maxNodes, setMaxNodes] = useState(80);
+  // Optional URL parameters make a view shareable: ?node=…&depth=1|2&limit=5..100&max=10..300
+  const intParam = (k, d, lo, hi) => Math.min(hi, Math.max(lo, parseInt(params.get(k) || "", 10) || d));
+  const [depth, setDepth] = useState(intParam("depth", 1, 1, 2));
+  const [perNode, setPerNode] = useState(intParam("limit", 20, 5, 100));
+  const [maxNodes, setMaxNodes] = useState(intParam("max", 80, 10, 300));
   const [nodeTypes, setNodeTypes] = useState(new Set(NODE_TYPES));
   const [edgeTypes, setEdgeTypes] = useState(new Set(EDGE_TYPES));
   const [extra, setExtra] = useState({ nodes: [], edges: [] });
