@@ -283,3 +283,59 @@ permutation z-scores and thresholds calibrated on 2019–2022. Alerts line up wi
 (Catalina 2019-10, WWDC 2023-06, "tahoe" 2025-09). Controlled tests: 0–5 % false alarms; 80 % detection
 of a 20 % topic surge; 100 % at 40 %. Semantic drift vs volume anomalies: ρ = 0.19 (mostly distinct signals).
 
+## Milestone 7: API and dashboard (done)
+
+| Component | Location |
+|-----------|----------|
+| Schema (SQLAlchemy 2.0, pgvector `vector(384)` + HNSW cosine index, GIN array indexes) | `backend/app/db/models.py` |
+| Migrations (Alembic; creates the `vector` extension) | `migrations/versions/0001_initial_schema.py` |
+| Loader: artifacts → PostgreSQL via `COPY` in one transaction; related-question precompute | `backend/app/services/loader.py`, `related_precompute.py` |
+| Synthetic demo dataset (labelled `demo` in every response) | `backend/app/services/demo.py` |
+| Routes, pagination, validation, structured errors | `backend/app/api/routes.py`, `backend/app/core/errors.py` |
+| Background jobs (subprocess per step, worker thread, status in `jobs`) | `backend/app/services/jobs.py` |
+| Dashboard (Next.js 15, JavaScript, Tailwind 4, Recharts, React Flow) | `frontend/` |
+| Containers | `docker-compose.yml`, `backend/Dockerfile`, `frontend/Dockerfile` |
+
+### Real data in the database (snapshot `9e8dce73e94a`)
+
+45,096 questions (with embeddings), 210,540 entity rows, 21 anomalies, 217,997 weekly series points,
+47,333 graph nodes, 562,964 edges, 1,352,715 precomputed related-question rows, 73,196 IDF terms,
+700 drift metric rows and 3,330 cluster movements. Loading takes about 3.5 minutes on a laptop, most of
+it spent on related-question precomputation. Typical API latency on this data is 5–90 ms.
+
+### Verified
+
+* All endpoints return 200 on real and demo data; invalid input returns structured 422s; unknown ids
+  return 404s.
+* Every dashboard page was rendered with headless Chrome in dark and light mode and inspected. That
+  pass found and fixed node overlap in the graph layout, light-themed graph controls in dark mode,
+  bar labels colliding with CI whiskers, and wording errors.
+* `docker compose up` brings up db + API + dashboard: the API runs migrations at start, serves the
+  real snapshot, and ran a background job (`split`) as a subprocess while `/health` answered in 13 ms.
+
+### Issues found and fixed
+
+* Drift `n` columns were floats with NaN, so `COPY` into integer columns failed. They are now nullable `Int64`.
+* Raw SQL with `:param IS NULL` failed in PostgreSQL (untyped parameter). Rewritten with SQLAlchemy expressions.
+* `/overview` returned 500 on real data: metric payloads mixed ISO-string and datetime timestamps.
+  "Latest analysis" now parses each artifact's own timestamp; regression test added.
+
+### Tests
+
+100 passed locally (81 pipeline/ML + 19 API). The API tests run against a dedicated `<db>_test`
+database: Alembic upgrade, downgrade to base and upgrade again; pagination and filters;
+validation errors; 404s; anomaly explanations; bounded graph neighbourhoods; related-question
+evidence (earlier questions only); drift filters; and the full job lifecycle with a real
+subprocess. CI now runs them against a `pgvector/pgvector:pg16` service container, plus a separate
+frontend lint and build job.
+
+### Known limitations
+
+* Related questions are precomputed (top 10 earlier questions per method). GraphSAGE is served as a
+  re-ranker of the embedding top 100, an approximation of the evaluated full ranking (documented in the
+  API response and in `docs/api.md`).
+* Job runner: one job per type, in-process, single API worker; a restart marks running jobs `interrupted`.
+* The API image is 2.8 GB because it includes the CPU ML stack, so jobs can rerun the pipeline.
+* The dashboard has no authentication. Ports are bound to 127.0.0.1 in Compose; don't expose it publicly
+  as is.
+

@@ -18,7 +18,7 @@ semantic drift over time.
 | 4. Knowledge graph | Done: 47k nodes, 563k typed edges, 36 communities, time snapshots |
 | 5. GraphSAGE (benchmark reproduction and link prediction) | Done: PPI 0.580 ± 0.018 (paper 0.598); link MRR 0.441 vs embedding 0.435 (not significant) |
 | 6. Drift monitoring | Done: calibrated monthly alerts; 0 % false alarms, 80 % power at a 20 % topic surge |
-| 7. API and dashboard | Not started |
+| 7. API and dashboard | Done: FastAPI + PostgreSQL/pgvector serving real results; Next.js dashboard (6 pages) |
 | 8. Final validation | Not started |
 
 Detailed progress and limitations: [docs/milestones.md](docs/milestones.md).
@@ -31,8 +31,42 @@ Requires Python 3.11+.
 python -m venv .venv && source .venv/bin/activate     # or: uv venv --python 3.12 .venv
 pip install -e ".[dev,test]"
 cp .env.example .env                                   # optional: add STACKEXCHANGE_KEY
-pytest -q                                              # offline tests on synthetic fixtures
+pytest -q                                              # tests; API tests need PostgreSQL (skipped otherwise)
 ```
+
+## Run the dashboard
+
+**With Docker** (PostgreSQL + API + dashboard):
+
+```bash
+docker compose up -d --build        # db on 127.0.0.1:5434, API on :8000, dashboard on :3000
+docker compose exec api python -m backend.app.cli load-demo   # synthetic demo data, clearly labelled
+# or, after running the pipeline (data/ is mounted into the API container):
+docker compose exec api python -m backend.app.cli load
+```
+
+**Locally** (Python 3.11+, Node 22):
+
+```bash
+pip install -e ".[api,ml,dev,test]"
+docker compose up -d db                     # or any PostgreSQL 16 with pgvector; set DATABASE_URL
+aii-db load                                 # migrate + load the current snapshot (or: aii-db load-demo)
+uvicorn backend.app.main:app --port 8000    # API docs at http://localhost:8000/docs
+cd frontend && npm ci && npm run dev        # dashboard at http://localhost:3000
+```
+
+The dashboard shows a banner on every page saying whether it is displaying **real** results (with
+the snapshot id) or the **synthetic demo** dataset. Endpoints, explanations and background-job
+limitations: [docs/api.md](docs/api.md).
+
+| Page | What it shows |
+|------|---------------|
+| Overview | totals, signal count, latest analysis, data freshness, most active categories |
+| Emerging issues | weekly observed vs expected volume per issue group; ranked signals with filters; explanation panel with evidence links |
+| Knowledge graph | interactive, bounded neighbourhoods (React Flow) with node/edge-type filters and links to questions |
+| Related questions | BM25, embedding and GraphSAGE recommendations side by side, each with its evidence |
+| Drift monitoring | monthly drift z-scores vs calibrated thresholds, alerts, cluster share changes, new terms, novelty |
+| Model evaluation | baselines vs GraphSAGE with CIs, paired tests, selection grid, PPI reproduction, detector evaluation, splits and leakage controls |
 
 ## Data pipeline
 
@@ -102,9 +136,12 @@ ml/            data pipeline and ML (runs without the API, database or frontend)
   models/        GraphSAGE link prediction (PyTorch Geometric)
   experiments/   PPI reproduction, link-prediction experiment
   evaluation/    ranking metrics and bootstrap CIs
+backend/       FastAPI app (api/, core/, db/, schemas/, services/), loader, demo data, job runner, tests
+migrations/    Alembic migrations (PostgreSQL + pgvector)
+frontend/      Next.js dashboard (JavaScript, Tailwind, Recharts, React Flow)
 configs/       pipeline settings and transparent entity/category dictionaries
-docs/          research design, data policy, milestone log
-tests/         pytest suite (synthetic fixtures only; no network)
+docs/          research design, data policy, API, milestone log, per-component write-ups
+tests/         pipeline/ML tests (synthetic fixtures; no network)
 ```
 
 ## Data use

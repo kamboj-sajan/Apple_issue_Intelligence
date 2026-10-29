@@ -48,6 +48,7 @@ test = ["scipy>=1.11", "scikit-learn>=1.4", "statsmodels>=0.14", "rank-bm25>=0.2
 
 [project.scripts]
 aii = "ml.cli:main"
+aii-db = "backend.app.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["ml*", "backend*"]

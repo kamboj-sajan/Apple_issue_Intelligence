@@ -11,6 +11,18 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: aii
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: aii
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aii -d aii" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://aii:ci_only_password@localhost:5432/aii
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,10 +33,26 @@ jobs:
         # CPU-only torch keeps the install small (the default Linux wheel bundles CUDA).
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install -e ".[dev,test]" torch-geometric
+          pip install -e ".[dev,test,api]" torch-geometric
       - name: Lint
         run: |
           ruff check .
           ruff format --check .
-      - name: Test (offline, synthetic fixtures only)
+      - name: Test (synthetic fixtures + API against PostgreSQL)
         run: pytest -q -m "not network"
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx next lint
+      - run: npm run build
